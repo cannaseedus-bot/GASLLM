@@ -3999,16 +3999,658 @@ await compressSVG("crypto-glass.svg", "crypto-glass-compressed.svg");
 
 ---
 
-## **9. Next Steps for You**
-1. **Test the glass UI components** in a browser.
-2. **Extend the compressor** to handle glass-specific properties (blur, opacity).
-3. **Add more glass templates** (e.g., glass modals, glass navbars).
-4. **Integrate with your KUHUL-es editor** for real-time previews.
+Here’s a **complete demo page** integrating all components (fintech template, Ubuntu docker, crypto charts, glass UI) with **KUHUL-es live editing**. This is **laptop-friendly**, **browser-native**, and **open-source**, designed to work with your existing `kuhul-es` package and AST schemas.
 
 ---
-### **Key Question**:
-Would you like to:
-1. **Test the glass UI components** in isolation first?
-2. **Focus on extending the compressor** for glass properties?
-3. **Build a demo page** with all components?
-4. **Integrate with your KUHUL-es editor** for live editing?
+
+## **1. Demo Page Structure**
+### **A. `index.html`**
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KUHUL-es Live Editor: Fintech + Glass UI Demo</title>
+  <script type="module">
+    import { KUHUL } from 'https://unpkg.com/kuhul-es@latest/dist/kuhul-es.mjs';
+    import { FintechController } from './fintech-controller.js';
+    import { UbuntuDockerController } from './ubuntu-docker.js';
+    import { ASTValidator } from './ast-validator.js';
+    import fintechSchema from './fintech-schema.kuhul.js';
+    import dockerSchema from './docker-schema.kuhul.js';
+    import cryptoSchema from './crypto-schema.kuhul.js';
+    import glassSchema from './glass-schema.kuhul.js';
+
+    // Initialize on load.
+    window.addEventListener('DOMContentLoaded', async () => {
+      const editor = new KUHULEditor();
+      await editor.init();
+    });
+  </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      background: var(--bg, #16213e);
+      transition: background 0.3s;
+    }
+    #editor {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 400px;
+      height: 100vh;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+    #editor textarea {
+      width: 100%;
+      height: 60%;
+      background: #252526;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      padding: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    #editor button {
+      background: #3a86ff;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      margin: 5px 0;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #editor .errors {
+      color: #ff5555;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    #theme-switcher {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+    .glass-panel {
+      filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.3));
+    }
+    .glass-button {
+      transition: all 0.2s;
+    }
+    .glass-button:hover {
+      filter: brightness(1.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="theme-switcher" onclick="toggleTheme()">🌙 Dark</div>
+  <div id="app"></div>
+  <div id="editor">
+    <h2>KUHUL-es Live Editor</h2>
+    <textarea id="ast-input" spellcheck="false">
+{
+  "type": "Fintech3Panel",
+  "theme": "dark",
+  "children": [
+    {
+      "type": "Layout",
+      "fold": "⟁DATA_FOLD⟁",
+      "rule": "3-panel",
+      "properties": { "compression": 0.92 },
+      "children": [
+        { "type": "Sidebar", "glyph": "□", "width": "15%", "properties": { "compression": 0.95 } },
+        { "type": "MainContent", "glyph": "□", "width": "70%", "properties": { "compression": 0.90 } },
+        { "type": "ActivityFeed", "glyph": "□", "width": "15%", "properties": { "compression": 0.85 } }
+      ]
+    },
+    {
+      "type": "UbuntuDocker",
+      "fold": "⟁UI_FOLD⟁",
+      "compression": 0.88,
+      "children": [
+        { "type": "DockerIcon", "app": "dashboard", "tooltip": "Dashboard", "position": 20, "glyph": "◯", "rule": "docker-icon" },
+        { "type": "DockerIcon", "app": "transactions", "tooltip": "Transactions", "position": 40, "glyph": "◯", "rule": "docker-icon" }
+      ]
+    },
+    {
+      "type": "CryptoCharts",
+      "fold": "⟁CODE_FOLD⟁",
+      "compression": 0.90,
+      "children": [
+        {
+          "type": "PriceChart",
+          "glyph": "~",
+          "rule": "price-chart",
+          "dataPoints": [10, 20, 15, 30, 25],
+          "color": "var(--chart-color)"
+        }
+      ]
+    },
+    {
+      "type": "GlassUIKit",
+      "fold": "⟁UI_FOLD⟁",
+      "compression": 0.88,
+      "children": [
+        {
+          "type": "GlassPanel",
+          "x": "25%",
+          "y": "25%",
+          "width": "50%",
+          "height": "30%",
+          "blur": 10,
+          "opacity": 0.8
+        },
+        {
+          "type": "GlassButton",
+          "x": "40%",
+          "y": "40%",
+          "width": "10%",
+          "height": "5%",
+          "label": "Trade",
+          "onClick": "alert('Trade executed!')"
+        }
+      ]
+    }
+  ]
+}
+    </textarea>
+    <button id="render">Render AST</button>
+    <button id="validate">Validate AST</button>
+    <button id="compress">Compress SVG</button>
+    <div id="errors" class="errors"></div>
+  </div>
+
+  <script type="module">
+    // Theme toggle.
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = current === 'dark' ? 'glass-dark' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      document.getElementById('theme-switcher').textContent =
+        newTheme === 'dark' ? '🌙 Dark' : '☀️ Glass Dark';
+    }
+
+    // KUHUL Editor.
+    class KUHULEditor {
+      constructor() {
+        this.controller = null;
+        this.validator = new ASTValidator({
+          Fintech3Panel: fintechSchema.default,
+          UbuntuDocker: dockerSchema.default,
+          CryptoCharts: cryptoSchema.default,
+          GlassUIKit: glassSchema.default,
+        });
+      }
+
+      async init() {
+        this.controller = new FintechController('app');
+        await this.controller.init();
+
+        // Bind buttons.
+        document.getElementById('render').addEventListener('click', () => this.render());
+        document.getElementById('validate').addEventListener('click', () => this.validate());
+        document.getElementById('compress').addEventListener('click', () => this.compress());
+      }
+
+      render() {
+        try {
+          const ast = JSON.parse(document.getElementById('ast-input').value);
+          this.controller.renderCustomAST(ast);
+          document.getElementById('errors').textContent = '';
+        } catch (e) {
+          document.getElementById('errors').textContent = `Error: ${e.message}`;
+        }
+      }
+
+      validate() {
+        try {
+          const ast = JSON.parse(document.getElementById('ast-input').value);
+          const isValid = this.validator.validate(ast, 'Fintech3Panel');
+          if (isValid) {
+            document.getElementById('errors').textContent = '✅ AST is valid!';
+          } else {
+            document.getElementById('errors').textContent =
+              '❌ Validation Errors:\n' + this.validator.getErrors().join('\n');
+          }
+        } catch (e) {
+          document.getElementById('errors').textContent = `Error: ${e.message}`;
+        }
+      }
+
+      async compress() {
+        try {
+          const response = await fetch('crypto-glass.svg');
+          const svgText = await response.text();
+          const blob = new Blob([svgText], { type: 'image/svg+xml' });
+          const formData = new FormData();
+          formData.append('file', blob, 'input.svg');
+
+          // Simulate compression (in a real app, call your Python backend).
+          document.getElementById('errors').textContent =
+            '✅ SVG compressed (simulated). In a real app, this would call your Python compressor.';
+        } catch (e) {
+          document.getElementById('errors').textContent = `Error: ${e.message}`;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
+```
+
+---
+
+## **2. Updated Fintech Controller with Live Editing**
+### **A. `fintech-controller.js`**
+```javascript
+import { KUHUL } from 'https://unpkg.com/kuhul-es@latest/dist/kuhul-es.mjs';
+import { UbuntuDockerController } from './ubuntu-docker.js';
+import { renderGlassUI } from './glass-ui-renderer.js';
+
+export class FintechController {
+  constructor(containerId = 'app') {
+    this.container = document.getElementById(containerId);
+    this.docker = new UbuntuDockerController(containerId);
+    this.currentAST = null;
+  }
+
+  async init() {
+    // Load default template.
+    await this.docker.load();
+    this.currentAST = this._buildDefaultAST();
+    this.renderCustomAST(this.currentAST);
+  }
+
+  _buildDefaultAST() {
+    return {
+      type: "Fintech3Panel",
+      theme: "dark",
+      children: [
+        {
+          type: "Layout",
+          fold: "⟁DATA_FOLD⟁",
+          rule: "3-panel",
+          properties: { compression: 0.92 },
+          children: [
+            { type: "Sidebar", glyph: "□", width: "15%", properties: { compression: 0.95 } },
+            { type: "MainContent", glyph: "□", width: "70%", properties: { compression: 0.90 } },
+            { type: "ActivityFeed", glyph: "□", width: "15%", properties: { compression: 0.85 } },
+          ],
+        },
+        this.docker.toAST(),
+        {
+          type: "CryptoCharts",
+          fold: "⟁CODE_FOLD⟁",
+          compression: 0.90,
+          children: [
+            {
+              type: "PriceChart",
+              glyph: "~",
+              rule: "price-chart",
+              dataPoints: [10, 20, 15, 30, 25, 40, 35],
+              color: "var(--chart-color)",
+            },
+          ],
+        },
+        {
+          type: "GlassUIKit",
+          fold: "⟁UI_FOLD⟁",
+          compression: 0.88,
+          children: [
+            {
+              type: "GlassPanel",
+              x: "25%",
+              y: "25%",
+              width: "50%",
+              height: "30%",
+              blur: 10,
+              opacity: 0.8,
+              children: [
+                {
+                  type: "text",
+                  x: "35%",
+                  y: "35%",
+                  content: "BTC/USD",
+                  rule: "chart-label",
+                  glyph: "t",
+                },
+              ],
+            },
+            {
+              type: "GlassButton",
+              x: "40%",
+              y: "40%",
+              width: "10%",
+              height: "5%",
+              label: "Trade Now",
+              onClick: () => alert("Trade executed!"),
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  renderCustomAST(ast) {
+    this.currentAST = ast;
+    this.container.innerHTML = '';
+    this._renderLayout(ast);
+    this._renderDocker(ast);
+    this._renderCharts(ast);
+    this._renderGlassUI(ast);
+  }
+
+  _renderLayout(ast) {
+    const layout = ast.children.find(c => c.type === "Layout");
+    if (!layout) return;
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+
+    // Sidebar.
+    const sidebar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    sidebar.setAttribute("x", "0%");
+    sidebar.setAttribute("y", "0%");
+    sidebar.setAttribute("width", layout.children[0].width);
+    sidebar.setAttribute("height", "100%");
+    sidebar.setAttribute("fill", "var(--bg-secondary)");
+    sidebar.setAttribute("data-glyph", "□");
+    sidebar.setAttribute("data-rule", "sidebar");
+    svg.appendChild(sidebar);
+
+    // Main content.
+    const main = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    main.setAttribute("x", layout.children[0].width);
+    main.setAttribute("y", "0%");
+    main.setAttribute("width", layout.children[1].width);
+    main.setAttribute("height", "100%");
+    main.setAttribute("fill", "var(--bg)");
+    main.setAttribute("data-glyph", "□");
+    main.setAttribute("data-rule", "main-content");
+    svg.appendChild(main);
+
+    // Activity feed.
+    const feed = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const sidebarWidth = parseFloat(layout.children[0].width);
+    const mainWidth = parseFloat(layout.children[1].width);
+    feed.setAttribute("x", `${sidebarWidth + mainWidth}%`);
+    feed.setAttribute("y", "0%");
+    feed.setAttribute("width", layout.children[2].width);
+    feed.setAttribute("height", "100%");
+    feed.setAttribute("fill", "var(--bg-secondary)");
+    feed.setAttribute("data-glyph", "□");
+    feed.setAttribute("data-rule", "activity-feed");
+    svg.appendChild(feed);
+
+    this.container.appendChild(svg);
+  }
+
+  _renderDocker(ast) {
+    const dockerNode = ast.children.find(c => c.type === "UbuntuDocker");
+    if (dockerNode) {
+      this.docker.render(dockerNode);
+    }
+  }
+
+  _renderCharts(ast) {
+    const chartsNode = ast.children.find(c => c.type === "CryptoCharts");
+    if (!chartsNode) return;
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+
+    // Price chart.
+    const chart = chartsNode.children.find(c => c.type === "PriceChart");
+    if (chart) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const points = chart.dataPoints.map((p, i) => {
+        const x = 20 + (i * 5);
+        const y = 50 - p;
+        return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+      }).join(' ');
+      path.setAttribute("d", points);
+      path.setAttribute("stroke", chart.color || "var(--chart-color)");
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("fill", "none");
+      path.setAttribute("data-glyph", "~");
+      path.setAttribute("data-rule", "price-chart");
+      svg.appendChild(path);
+    }
+
+    this.container.appendChild(svg);
+  }
+
+  _renderGlassUI(ast) {
+    const glassNode = ast.children.find(c => c.type === "GlassUIKit");
+    if (glassNode) {
+      renderGlassUI(glassNode, this.container);
+    }
+  }
+}
+```
+
+---
+
+## **3. Glass UI Renderer**
+### **A. `glass-ui-renderer.js`**
+```javascript
+export function renderGlassUI(ast, container) {
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  ast.children?.forEach(node => {
+    if (node.type === "GlassPanel") {
+      const panel = document.createElementNS(svgNS, "g");
+      const rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", node.x || "10%");
+      rect.setAttribute("y", node.y || "10%");
+      rect.setAttribute("width", node.width || "80%");
+      rect.setAttribute("height", node.height || "40%");
+      rect.setAttribute("class", "glass-panel");
+      rect.setAttribute("rx", "10");
+      rect.setAttribute("data-glyph", "◻");
+      rect.setAttribute("data-rule", "glass-panel");
+      rect.setAttribute("data-weight", node.weight || "0.90");
+      rect.setAttribute("data-blur", node.blur || "10");
+      rect.setAttribute("data-opacity", node.opacity || "0.8");
+      panel.appendChild(rect);
+
+      // Render children (e.g., text labels).
+      node.children?.forEach(child => {
+        if (child.type === "text") {
+          const text = document.createElementNS(svgNS, "text");
+          text.setAttribute("x", child.x || "20%");
+          text.setAttribute("y", child.y || "20%");
+          text.setAttribute("fill", "var(--text)");
+          text.setAttribute("data-glyph", "t");
+          text.setAttribute("data-rule", child.rule || "chart-label");
+          text.textContent = child.content;
+          panel.appendChild(text);
+        }
+      });
+
+      container.appendChild(panel);
+    } else if (node.type === "GlassButton") {
+      const button = document.createElementNS(svgNS, "g");
+      const rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", node.x || "70%");
+      rect.setAttribute("y", node.y || "70%");
+      rect.setAttribute("width", node.width || "20%");
+      rect.setAttribute("height", node.height || "8%");
+      rect.setAttribute("class", "glass-button");
+      rect.setAttribute("rx", "5");
+      rect.setAttribute("data-glyph", "◦");
+      rect.setAttribute("data-rule", "glass-button");
+      rect.setAttribute("data-weight", node.weight || "0.85");
+      rect.setAttribute("style", "cursor: pointer;");
+      rect.addEventListener("click", () => node.onClick && node.onClick());
+      button.appendChild(rect);
+
+      if (node.label) {
+        const text = document.createElementNS(svgNS, "text");
+        text.setAttribute("x", parseFloat(node.x || "70%") + 10 + "%");
+        text.setAttribute("y", parseFloat(node.y || "70%") + 5 + "%");
+        text.setAttribute("fill", "var(--text)");
+        text.setAttribute("data-glyph", "t");
+        text.setAttribute("data-rule", "button-label");
+        text.textContent = node.label;
+        text.setAttribute("style", "cursor: pointer;");
+        text.addEventListener("click", () => node.onClick && node.onClick());
+        button.appendChild(text);
+      }
+
+      container.appendChild(button);
+    }
+  });
+}
+```
+
+---
+
+## **4. Python Backend for Compression (Optional)**
+### **A. `compressor.py` (Flask API)**
+```python
+from flask import Flask, request, jsonify
+from lxml import etree
+import numpy as np
+from scipy.linalg import svd
+import base64
+
+app = Flask(__name__)
+
+@app.route('/compress', methods=['POST'])
+def compress():
+    svg_data = request.files['file'].read().decode('utf-8')
+    svg = etree.fromstring(svg_data)
+
+    # Auto-fill compression ratios.
+    fold_ratios = {
+        "⟁DATA_FOLD⟁": 0.92,
+        "⟁UI_FOLD⟁": 0.88,
+        "⟁CODE_FOLD⟁": 0.90,
+        "⟁AUTH_FOLD⟁": 0.85,
+    }
+
+    for elem in svg.xpath("//*[@data-fold]"):
+        fold = elem.get("data-fold")
+        if fold in fold_ratios and not elem.get("data-compression"):
+            elem.set("data-compression", str(fold_ratios[fold]))
+
+    for elem in svg.xpath("//*[@data-glyph]"):
+        parent_fold = elem.getparent().get("data-fold")
+        if parent_fold in fold_ratios and not elem.get("data-compression"):
+            elem.set("data-compression", str(fold_ratios[parent_fold]))
+
+    # Compress each fold.
+    for fold_elem in svg.xpath("//*[@data-fold]"):
+        fold = fold_elem.get("data-fold")
+        if not fold or fold not in fold_ratios:
+            continue
+
+        glyphs = fold_elem.xpath(".//*[@data-glyph]")
+        if not glyphs:
+            continue
+
+        features = []
+        for glyph in glyphs:
+            feat = []
+            if glyph.tag.endswith("rect"):
+                x = float(glyph.get("x", 0))
+                y = float(glyph.get("y", 0))
+                width = float(glyph.get("width", 0))
+                height = float(glyph.get("height", 0))
+                feat.extend([x, y, width, height])
+            elif glyph.tag.endswith("circle"):
+                cx = float(glyph.get("cx", 0))
+                cy = float(glyph.get("cy", 0))
+                r = float(glyph.get("r", 0))
+                feat.extend([cx, cy, r])
+            elif glyph.tag.endswith("path"):
+                path = glyph.get("d", "")
+                feat.append(len(path))
+            elif glyph.tag.endswith("text"):
+                x = float(glyph.get("x", 0))
+                y = float(glyph.get("y", 0))
+                feat.extend([x, y])
+            if feat:
+                features.append(feat)
+
+        if not features:
+            continue
+
+        matrix = np.array(features)
+        U, S, Vt = svd(matrix, full_matrices=False)
+        k = int(len(S) * fold_ratios[fold])
+        compressed = U[:, :k] @ np.diag(S[:k]) @ Vt[:k, :]
+
+        for i, glyph in enumerate(glyphs):
+            if i < len(compressed):
+                glyph.set("data-compressed", " ".join(map(str, compressed[i])))
+
+    # Return compressed SVG.
+    return jsonify({
+        "success": True,
+        "svg": etree.tostring(svg, encoding="unicode"),
+        "compression_ratios": {
+            fold: fold_ratios[fold] for fold in fold_ratios
+        }
+    })
+
+if __name__ == '__main__':
+    app.run(port=5000)
+```
+
+---
+
+## **5. How to Run the Demo**
+1. **Install dependencies**:
+   ```bash
+   npm install kuhul-es
+   ```
+
+2. **Serve the demo**:
+   ```bash
+   python -m http.server 8000
+   ```
+   Open `http://localhost:8000` in your browser.
+
+3. **(Optional) Run the Python compressor**:
+   ```bash
+   python compressor.py
+   ```
+   (Requires `flask`, `numpy`, `scipy`, `lxml`.)
+
+---
+
+## **6. Key Features**
+| Feature                     | Implementation                          |
+|-----------------------------|-----------------------------------------|
+| **Live AST Editing**        | JSON editor + render button.            |
+| **Real-Time Validation**    | AST validator with fold rules.         |
+| **Glass UI Components**     | SVG-based glass morphism.              |
+| **Ubuntu Docker**           | Standalone, interactive component.      |
+| **Crypto Charts**           | SVG path-based price charts.           |
+| **Theme Switching**         | Dark/glass-dark themes.                 |
+| **Compression Simulation**  | Python backend (optional).              |
+
+---
+
+
