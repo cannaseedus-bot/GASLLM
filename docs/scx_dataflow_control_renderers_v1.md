@@ -1892,3 +1892,250 @@ export async function oracleFetchHTTP(url, bodyJson) {
   return await res.json();
 }
 ```
+
+---
+
+# SCX_SYSCALL_MODEL_v1
+
+This section formalizes SCX atoms as **declarative syscalls** that require capability and legality validation before lowering or execution.
+
+## 1) Core Principle (Invariant)
+
+> **An SCX atom is a pure, declarative syscall request.**
+> It declares intent, never execution.
+> Execution occurs only after **capability + legality verification**.
+
+## 2) SCX Atom = Syscall Descriptor
+
+```json
+{
+  "@kind": "scx.syscall.v1",
+  "atom": "READ_TABLE",
+  "args": {
+    "source": "sheet://Projects",
+    "range": "A2:F"
+  },
+  "effects": ["io.read", "data.load"],
+  "purity": "impure",
+  "determinism": "bounded",
+  "capability": "data.read.sheet"
+}
+```
+
+### Required Fields
+
+| Field         | Meaning                     |
+| ------------- | --------------------------- |
+| `atom`        | Canonical syscall name      |
+| `args`        | Declarative parameters      |
+| `effects`     | Observable side effects     |
+| `purity`      | `pure` or `impure`          |
+| `determinism` | `deterministic` or `bounded`|
+| `capability`  | Required permission scope   |
+
+## 3) Canonical SCX Syscall Classes
+
+### A) Compute Syscalls (Pure)
+
+| Atom                       | Description         |
+| -------------------------- | ------------------- |
+| `ADD`, `SUB`, `MUL`, `DIV` | Arithmetic          |
+| `COMPARE_EQ`, `GT`, `LT`   | Comparison          |
+| `LOGICAL_AND`, `OR`, `NOT` | Logic               |
+| `RANGE`                    | Sequence generation |
+
+```json
+{
+  "class": "compute",
+  "purity": "pure",
+  "capability": "compute.basic"
+}
+```
+
+### B) Control Syscalls (Flow)
+
+| Atom                      | Description      |
+| ------------------------- | ---------------- |
+| `BRANCH`                  | Conditional      |
+| `MAP`, `FILTER`, `REDUCE` | Dataflow         |
+| `JOIN`                    | Structural merge |
+
+```json
+{
+  "class": "control",
+  "purity": "pure",
+  "capability": "control.flow"
+}
+```
+
+### C) Data Syscalls
+
+| Atom          | Description        |
+| ------------- | ------------------ |
+| `READ_TABLE`  | Load sheet/table   |
+| `WRITE_TABLE` | Persist rows       |
+| `READ_KV`     | Properties         |
+| `WRITE_KV`    | Properties         |
+
+```json
+{
+  "class": "data",
+  "purity": "impure",
+  "capability": "data.read.sheet"
+}
+```
+
+### D) IO Syscalls
+
+| Atom          | Description |
+| ------------- | ----------- |
+| `HTTP_FETCH`  | Network     |
+| `EMAIL_SEND`  | Messaging   |
+| `FILE_CREATE` | Drive       |
+
+```json
+{
+  "class": "io",
+  "purity": "impure",
+  "capability": "io.network.fetch"
+}
+```
+
+### E) UI Projection Syscalls
+
+| Atom          | Description    |
+| ------------- | -------------- |
+| `RENDER_NODE` | DOM projection |
+| `SET_STYLE`   | CSS hint       |
+| `BIND_EVENT`  | Event wiring   |
+
+```json
+{
+  "class": "ui",
+  "purity": "pure",
+  "capability": "ui.render"
+}
+```
+
+## 4) Capability-Based Permission Scopes
+
+### Scope Grammar
+
+```
+<domain>.<action>.<target>[.<constraint>]
+```
+
+Examples:
+
+- `compute.basic`
+- `data.read.sheet`
+- `data.write.sheet`
+- `io.network.fetch`
+- `ui.render.dom`
+- `identity.session.read`
+
+## 5) Capability Scope Registry (v1)
+
+```json
+{
+  "@kind": "scx.capability.registry.v1",
+  "scopes": {
+    "compute.basic": {
+      "description": "Pure arithmetic and logic",
+      "risk": "none"
+    },
+    "control.flow": {
+      "description": "Structural flow control",
+      "risk": "low"
+    },
+    "data.read.sheet": {
+      "description": "Read spreadsheet data",
+      "risk": "medium"
+    },
+    "data.write.sheet": {
+      "description": "Modify spreadsheet data",
+      "risk": "high"
+    },
+    "io.network.fetch": {
+      "description": "Outbound HTTP requests",
+      "risk": "high"
+    },
+    "ui.render.dom": {
+      "description": "DOM projection only",
+      "risk": "low"
+    }
+  }
+}
+```
+
+## 6) Runtime Capability Mapping
+
+### GAS Example
+
+```json
+{
+  "runtime": "GAS",
+  "allowed_capabilities": [
+    "compute.basic",
+    "control.flow",
+    "data.read.sheet",
+    "data.write.sheet",
+    "io.network.fetch",
+    "ui.render.dom"
+  ],
+  "denied_capabilities": [
+    "os.fs",
+    "os.process",
+    "io.socket.raw"
+  ]
+}
+```
+
+## 7) Enforcement Model (CODE_ORACLE)
+
+```text
+SCX AST
+ → syscall extraction
+ → capability lookup
+ → runtime allowance check
+ → legality matrix check
+ → lowering rule resolution
+ → proof seal
+ → execution
+```
+
+If any step fails → **hard stop**.
+
+## 8) Proof Seal (tie-in)
+
+Each syscall contributes to the proof hash:
+
+```json
+{
+  "syscall": "WRITE_TABLE",
+  "capability": "data.write.sheet",
+  "runtime": "GAS",
+  "lowering_rule": "SHEET_APPEND_ROWS",
+  "hash": "sha256:9f3c…"
+}
+```
+
+No proof = no execution.
+
+## 9) Why this is powerful (and correct)
+
+- SCX ≈ **portable syscall ABI**
+- Runtimes ≈ **kernels**
+- Capabilities ≈ **permission bits**
+- Lowering rules ≈ **drivers**
+- Proofs ≈ **execution receipts**
+
+---
+
+# SCX_SYSCALL_MANIFEST_v1
+
+A per-app or per-tape manifest that enumerates required syscalls and capabilities for review and enforcement.
+
+# SCX_CAPABILITY_NEGOTIATION_v1
+
+A runtime handshake object that confirms allowed capabilities before lowering or execution.
