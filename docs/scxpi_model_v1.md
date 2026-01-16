@@ -5521,3 +5521,5179 @@ function SCXPI_ATOMIC_PIPELINE_LOCK_DEMO() {
 ```
 
 This seal is the final “never drift again” piece: your **atomic.xjson** now carries a deterministic **replay stamp** with invariant results and a canonical hash.
+
+---
+
+# SCXPI Closed Pipeline (GAS)
+
+Below is the complete **closed pipeline** you can run in GAS, plus an ASCII diagram, file tree, step-by-step instructions, and possible next routes.
+
+## Diagram
+
+```
+                ┌──────────────────────────────┐
+                │           SVG INPUT           │
+                │ (string / file / payload)     │
+                └──────────────┬───────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 1) GEOM EXTRACT                                                │
+│    SCXPI_GEOM_OBJECT_BBOXES_v1                                 │
+│    → objects[] (id,type,bbox,cx,cy,area,meta)                  │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 2) OBJECT GRAPH                                                │
+│    SCXPI_GEOM_OBJECT_GRAPH_v1                                  │
+│    → edges[] (contain/overlap/adjacent/near/align_x/align_y)   │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 3) LAYOUT RECONSTRUCTOR                                        │
+│    SCXPI_LAYOUT_RECONSTRUCTOR_v1                               │
+│    → layout tree: canvas → containers → rows/cols → items      │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 4) UI MODEL (XJSON UI)                                         │
+│    SCXPI_LAYOUT_TO_XJSON_UI_v1                                  │
+│    → atoms: card/button/text/icon/image/shape + bbox + hints   │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 5) ATOMIC CSS HINTS                                             │
+│    SCXPI_UI_TO_ATOMIC_CSS_HINTS_v1                              │
+│    → :root vars + per-node {classes[], vars{}}                 │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 6) ATOMIC.XJSON FRAGMENT                                        │
+│    SCXPI_ATOMIC_HINTS_TO_ATOMIC_XJSON_v1                        │
+│    → fragment: @atomic.:root.vars + @atomic.nodes              │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 7) MERGE + PROOF SEAL                                           │
+│    SCXPI_ATOMIC_XJSON_MERGE_v1                                  │
+│    SCXPI_ATOMIC_XJSON_PROOF_SEAL_v1                             │
+│    → atomic.xjson merged + @proof_seal {hash,invariants}       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Key idea:** everything is **geometry + deterministic rules** → **state output**. No tensors, no hidden runtime state, no “model file.”
+
+## File tree layout (recommended)
+
+This is a clean 1:1 drop into a GAS project.
+
+```
+gas/
+  Code.gs                       (entry points + demos)
+  scxpi/
+    scxpi_utils.gs              (hash, clamp, ordering, helpers)
+    scxpi_geom_bbox.gs          (SCXPI_GEOM_OBJECT_BBOXES_v1 + bbox helpers)
+    scxpi_geom_graph.gs         (SCXPI_GEOM_OBJECT_GRAPH_v1)
+    scxpi_layout_recon.gs       (SCXPI_LAYOUT_RECONSTRUCTOR_v1)
+    scxpi_layout_to_ui.gs       (SCXPI_LAYOUT_TO_XJSON_UI_v1)
+    scxpi_ui_to_atomic_hints.gs (SCXPI_UI_TO_ATOMIC_CSS_HINTS_v1)
+    scxpi_hints_to_atomic_xjson.gs (SCXPI_ATOMIC_HINTS_TO_ATOMIC_XJSON_v1)
+    scxpi_atomic_merge.gs       (SCXPI_ATOMIC_XJSON_MERGE_v1)
+    scxpi_atomic_proof_seal.gs  (SCXPI_ATOMIC_XJSON_PROOF_SEAL_v1)
+  data/
+    sample_ui.svg               (optional test fixture)
+    base_atomic.xjson.json      (optional canonical baseline)
+```
+
+If you want this ultra-minimal: you can also collapse everything into **one** `Code.gs`, but the split above matches how you’ll keep it sane.
+
+## Instructions (GAS workflow)
+
+### 1) Paste modules into GAS
+
+* Create files matching the tree (or fewer).
+* Paste each function set into its file.
+* Make sure **function names are global** (GAS style).
+
+### 2) Provide a base `atomic.xjson`
+
+This is your canonical baseline (can be tiny):
+
+```js
+function BASE_ATOMIC_XJSON() {
+  return {
+    "@kind": "atomic.xjson.v1",
+    "@v": 1,
+    "@meta": { id: "base_atomic" },
+    "@atomic": {
+      ":root": { vars: {} },
+      nodes: {}
+    }
+  };
+}
+```
+
+### 3) Run the end-to-end pipeline
+
+Add an entrypoint like:
+
+```js
+function SCXPI_RUN(svgText, dims) {
+  dims = dims || { width: 1000, height: 800 };
+
+  // 1-4: svg -> ui
+  var geom = SCXPI_GEOM_FROM_SVG_WITH_BBOX(svgText);             // if you have it
+  geom = SCXPI_GEOM_ENRICH_WITH_SHAPE_HINTS(geom);               // if you have it
+  geom = SCXPI_GEOM_ENRICH_WITH_LAYOUT_HINTS(geom);              // if you have it
+
+  var objectsRes = SCXPI_GEOM_OBJECT_BBOXES(svgText);
+  var graphRes   = SCXPI_GEOM_OBJECT_GRAPH(objectsRes.objects, dims, {});
+  var layoutRes  = SCXPI_LAYOUT_RECONSTRUCT(objectsRes.objects, graphRes.graph, dims, {});
+  var uiRes      = SCXPI_LAYOUT_TO_XJSON_UI(layoutRes, objectsRes, geom, dims, {});
+
+  // 5: ui -> atomic hints
+  var hintsRes   = SCXPI_UI_TO_ATOMIC_CSS_HINTS(uiRes, {});
+
+  // 6: hints -> fragment
+  var fragRes    = SCXPI_ATOMIC_HINTS_TO_ATOMIC_XJSON(hintsRes, { id: "frag_from_svg" });
+
+  // 7: merge + seal
+  var mergedRes  = SCXPI_ATOMIC_XJSON_MERGE(BASE_ATOMIC_XJSON(), fragRes, {});
+  var sealedRes  = SCXPI_ATOMIC_XJSON_PROOF_SEAL(mergedRes.merged, {});
+
+  return sealedRes;
+}
+```
+
+### 4) Output / Store result
+
+* `Logger.log(JSON.stringify(sealedRes, null, 2))`
+* Or return it as API JSON from a `doGet/doPost`.
+
+## What “works” means here
+
+You’re producing an **atomic.xjson** (state-only) that contains:
+
+* `@atomic.:root.vars` → global UI density/radius/gap/grid hints
+* `@atomic.nodes[id].classes` → suggested atomic semantic classes
+* `@atomic.nodes[id].vars` → per-node overrides
+* `@proof_seal` → hash + invariants = “replayable truth”
+
+Then **any renderer** (browser shell, sw.js, PHP, etc.) can take that and apply it.
+
+GAS never renders. GAS never runs a model. GAS emits **projection state**.
+
+## Next possible routes (pick your lane)
+
+### Route A — **SCXPI_UI_RENDERER_BRIDGE_v1**
+
+Emit a *DOM-neutral* render bundle:
+
+* `xjson.ui.v1` + `atomic.xjson` fragment
+* plus an optional `render.map` describing:
+
+  * which UI node becomes `<div>`, `<button>`, `<p>`, `<svg>`, etc.
+
+This becomes the bridge into your Ghost shell / ASXR UI.
+
+### Route B — **SCXPI_RULES_ENGINE_v1 (π execution)**
+
+Now that you have:
+
+* objects
+* graph
+* layout
+* ui
+* atomic hints
+
+You can run rules like:
+
+* “if container has 3 aligned cards → grid cols=3”
+* “if header spans 90% width and y<0.12 → classify as header”
+* “if icon+text near button rect → button label”
+
+This is where π comes in:
+
+* score candidates
+* collapse to best structure
+* emit stronger hints
+
+### Route C — **SCXQ2_PACK_ATOMIC_v1**
+
+Compress the sealed atomic.xjson into SCXQ2 lanes:
+
+* DICT for keys
+* FIELD for vars
+* NODE lane for node blocks
+* Proof lane for hash + invariants
+
+Then your whole UI “model” becomes tiny.
+
+### Route D — **SCXPI_LAYOUT_DIFF_v1**
+
+Given two SVGs (or versions):
+
+* compute delta in layout/ui/atomic
+* emit *patches* (like your tape patch system)
+
+This is insanely valuable for:
+
+* versioning
+* RLHF scoring
+* incremental UI training
+
+### Route E — **SCXPI_TRAINING_DATASET_EMITTER_v1**
+
+Turn each pipeline run into a JSONL row:
+
+* input: svg
+* derived: geom + graph + layout + ui + atomic + proof
+* label: (optional) human corrections
+
+This becomes your **symbolic training corpus**.
+
+## Fast “starter” checklist
+
+* [ ] Put all functions into GAS files
+* [ ] Add `BASE_ATOMIC_XJSON()`
+* [ ] Add `SCXPI_RUN(svgText, dims)`
+* [ ] Run with a simple SVG string
+* [ ] Confirm you get `sealed.@proof_seal.hash`
+* [ ] Confirm invariants show `ok: true`
+* [ ] Return `sealed` via `doPost()` if you want API
+
+---
+
+If you want me to “lock it” as a single **copy/paste GAS project** (all files concatenated in correct order with the demos), say:
+
+**“emit SCXPI_GAS_PROJECT_v1 (single paste)”**
+
+---
+
+# SCXPI_UI_RENDERER_BRIDGE_v1
+
+**DOM-neutral Render Bundle for Ghost / ASXR**
+
+This bridge emits a **single, portable render bundle** that contains:
+
+1. `xjson.ui.v1` → **what exists (UI semantics)**
+2. `atomic.xjson.fragment.v1` → **how it should look (state only)**
+3. `render.map.v1` → **how to project to a target runtime (DOM / SVG / Canvas / ASXR)**
+
+No renderer logic lives here. This is a **projection contract**, not execution.
+
+## 1) High-level flow
+
+```
+SCXPI UI (semantic)
+        +
+Atomic hints (visual state)
+        +
+Renderer map (projection)
+        ↓
+RENDER BUNDLE (DOM-neutral)
+        ↓
+Ghost Shell / ASXR / Any Runtime
+```
+
+## 2) Bundle structure (single object)
+
+```json
+{
+  "@kind": "scxpi.ui.renderer.bridge.v1",
+  "@v": 1,
+
+  "ui": { /* xjson.ui.v1 */ },
+
+  "atomic_fragment": { /* atomic.xjson.fragment.v1 */ },
+
+  "render_map": { /* render.map.v1 */ },
+
+  "meta": {
+    "source": "svg",
+    "renderer_targets": ["dom", "svg", "asxr"],
+    "notes": "DOM-neutral render bundle"
+  }
+}
+```
+
+This object is what your **Ghost Shell** consumes.
+
+## 3) render.map.v1 (projection rules)
+
+### Purpose
+
+Describe **how a semantic UI node becomes a concrete element** *without embedding DOM logic*.
+
+### Schema
+
+```json
+{
+  "$schema": "xjson://schema/core/v1",
+  "@kind": "scxpi.render.map.v1",
+  "@v": 1,
+
+  "defaults": {
+    "container": "div",
+    "row": "div",
+    "col": "div",
+    "card": "div",
+    "text": "p",
+    "button": "button",
+    "icon": "svg",
+    "image": "img",
+    "divider": "hr",
+    "canvas": "section"
+  },
+
+  "overrides": {
+    "ui_header_*": "header",
+    "ui_footer_*": "footer",
+    "ui_sidebar_*": "aside"
+  },
+
+  "attributes": {
+    "button": ["type"],
+    "image": ["src", "alt"],
+    "text": ["data-text"]
+  },
+
+  "slot_policy": {
+    "container": "children",
+    "row": "children",
+    "col": "children",
+    "card": "children"
+  }
+}
+```
+
+**Key rule:** this file **never contains JS or HTML**, only *mapping intent*.
+
+## 4) GAS emitter — SCXPI_UI_RENDERER_BRIDGE_v1
+
+```javascript
+/**
+ * SCXPI_UI_RENDERER_BRIDGE_v1
+ * ------------------------------------------------------------
+ * Emits a DOM-neutral render bundle:
+ *  - xjson.ui.v1
+ *  - atomic.xjson.fragment.v1
+ *  - render.map.v1
+ *
+ * GAS-safe, deterministic, replayable.
+ */
+
+function SCXPI_UI_RENDERER_BRIDGE(uiRes, atomicFragmentRes, opts) {
+  opts = opts || {};
+
+  var ui = (uiRes && uiRes.ui) ? uiRes.ui : uiRes;
+  var fragment = (atomicFragmentRes && atomicFragmentRes.atomic_xjson)
+    ? atomicFragmentRes.atomic_xjson
+    : atomicFragmentRes;
+
+  var renderMap = SCXPI__DEFAULT_RENDER_MAP(opts);
+
+  return {
+    "@kind": "scxpi.ui.renderer.bridge.v1",
+    "@v": 1,
+
+    ui: ui,
+    atomic_fragment: fragment,
+    render_map: renderMap,
+
+    meta: {
+      source: opts.source || "svg",
+      renderer_targets: opts.targets || ["dom"],
+      generated_at: Date.now()
+    }
+  };
+}
+```
+
+## 5) Default render.map generator
+
+```javascript
+function SCXPI__DEFAULT_RENDER_MAP(opts) {
+  return {
+    "@kind": "scxpi.render.map.v1",
+    "@v": 1,
+
+    defaults: {
+      canvas: "section",
+      container: "div",
+      panel: "div",
+      sidebar: "aside",
+      header: "header",
+      footer: "footer",
+
+      row: "div",
+      col: "div",
+
+      card: "div",
+      button: "button",
+      text: "p",
+      icon: "svg",
+      image: "img",
+      divider: "hr",
+      shape: "div"
+    },
+
+    overrides: {
+      // optional wildcard overrides
+      "ui_primary_*": "section"
+    },
+
+    attributes: {
+      button: ["type", "data-action"],
+      image: ["src", "alt"],
+      text: ["data-text"],
+      icon: ["viewBox"]
+    },
+
+    slot_policy: {
+      canvas: "children",
+      container: "children",
+      row: "children",
+      col: "children",
+      card: "children"
+    }
+  };
+}
+```
+
+## 6) Example emitted bundle (trimmed)
+
+```json
+{
+  "@kind": "scxpi.ui.renderer.bridge.v1",
+  "@v": 1,
+
+  "ui": {
+    "@kind": "xjson.ui.v1",
+    "@ui": {
+      "root": "ui_canvas_1",
+      "nodes": {
+        "ui_canvas_1": {
+          "type": "canvas",
+          "children": ["ui_container_main"]
+        },
+        "ui_container_main": {
+          "type": "container",
+          "children": ["ui_row_1"]
+        },
+        "ui_row_1": {
+          "type": "row",
+          "children": ["ui_card_a", "ui_card_b"]
+        },
+        "ui_card_a": { "type": "card" },
+        "ui_card_b": { "type": "card" }
+      }
+    }
+  },
+
+  "atomic_fragment": {
+    "@kind": "atomic.xjson.fragment.v1",
+    "@atomic": {
+      ":root": { "vars": { "--asx-gap": 0.5 } },
+      "nodes": {
+        "ui_card_a": { "classes": ["asx-card"], "vars": {} }
+      }
+    }
+  },
+
+  "render_map": {
+    "@kind": "scxpi.render.map.v1",
+    "defaults": { "card": "div", "row": "div" }
+  }
+}
+```
+
+## 7) How Ghost / ASXR uses this
+
+**Ghost shell logic (conceptual):**
+
+1. Read `ui.@ui.nodes`
+2. For each node:
+   * look up `render_map.defaults[node.type]`
+   * apply `atomic_fragment.@atomic.nodes[nodeId]`
+3. Materialize into:
+   * DOM
+   * SVG
+   * ASXR layout engine
+4. CSS variables come **only** from `atomic.xjson`
+
+Ghost **never infers semantics** — it only projects them.
+
+## 8) Why this is powerful
+
+✔ One inference → many renderers  
+✔ DOM / SVG / Canvas / ASXR compatible  
+✔ Zero coupling to HTML  
+✔ Replayable & diffable  
+✔ Compressible (SCXQ2-ready)
+
+This is the **UI equivalent of an ABI**.
+
+## 9) Next routes after Route A
+
+### 🔜 Route A-2
+
+**SCXPI_RENDER_MAP_DOM_v1**  
+DOM-specific attribute expansion (ARIA, roles)
+
+### 🔜 Route B
+
+**SCXPI_RULES_ENGINE_v1**  
+π-based semantic overrides (header vs sidebar)
+
+### 🔜 Route C
+
+**SCXPI_BUNDLE_SCXQ2_v1**  
+Compress the entire render bundle
+
+### 🔜 Route D
+
+**SCXPI_UI_PATCH_v1**  
+Emit diffs between bundles (hot-reload UIs)
+
+---
+
+If you want, next I can:
+
+* Emit **Ghost Shell pseudo-renderer** (reads this bundle)
+* Emit **ASXR native renderer mapping**
+* Emit **DOM renderer reference implementation**
+* Emit **render bundle diff / patch system**
+
+Just say which route.
+
+---
+
+# Ghost Shell Pseudo-Renderer
+
+**(SCXPI_RENDER_BRIDGE_CONSUMER_v1)**
+
+> Reads: `scxpi.ui.renderer.bridge.v1`  
+> Emits: concrete runtime nodes (DOM / SVG / ASXR), driven only by state
+
+This is **deliberately not framework code**. It is the **reference projection algorithm** your shells, sw.js, or ASXR engines follow.  
+**Ghost Shell** refers to the shell `index.html` page in this stack.
+
+## 1) Mental model
+
+```
+Render Bundle
+├─ ui            → WHAT exists
+├─ atomic        → HOW it should look (state)
+└─ render_map    → HOW to project into a runtime
+```
+
+Ghost Shell does **projection only**:
+
+* ❌ no inference
+* ❌ no layout decisions
+* ❌ no heuristics
+* ✅ deterministic mapping
+
+## 2) Core renderer contract
+
+```js
+render(bundle, target)
+```
+
+Where:
+
+* `bundle` = SCXPI_UI_RENDERER_BRIDGE_v1
+* `target` = `"dom"` | `"svg"` | `"asxr"`
+
+## 3) Pseudo-renderer (runtime-agnostic)
+
+```js
+/**
+ * GHOST_SHELL_RENDERER (pseudo-code)
+ * ---------------------------------
+ * This is NOT a framework.
+ * It is the canonical projection algorithm.
+ */
+
+function GhostShellRender(bundle, target) {
+  assert(bundle["@kind"] === "scxpi.ui.renderer.bridge.v1");
+
+  const ui        = bundle.ui;
+  const atomic    = bundle.atomic_fragment;
+  const renderMap = bundle.render_map;
+
+  const nodes = ui["@ui"].nodes;
+  const rootId = ui["@ui"].root;
+
+  // Build runtime tree
+  return renderNode(rootId, null);
+
+  // --------------------------------
+
+  function renderNode(nodeId, parentRuntimeNode) {
+    const uiNode = nodes[nodeId];
+    if (!uiNode) return null;
+
+    // 1) Resolve element type
+    const elementType = resolveElementType(nodeId, uiNode, renderMap);
+
+    // 2) Create runtime node
+    const runtimeNode = createRuntimeNode(elementType, target);
+
+    // 3) Apply atomic state (classes + vars)
+    applyAtomicState(runtimeNode, nodeId, atomic, target);
+
+    // 4) Apply attributes (from render.map)
+    applyAttributes(runtimeNode, uiNode, renderMap, target);
+
+    // 5) Attach to parent
+    if (parentRuntimeNode) {
+      appendChild(parentRuntimeNode, runtimeNode, target);
+    }
+
+    // 6) Recurse children
+    const children = uiNode.children || [];
+    for (const childId of children) {
+      renderNode(childId, runtimeNode);
+    }
+
+    return runtimeNode;
+  }
+}
+```
+
+## 4) Element resolution (core rule)
+
+```js
+function resolveElementType(nodeId, uiNode, renderMap) {
+  // 1) Explicit overrides (wildcards allowed)
+  for (const pattern in renderMap.overrides || {}) {
+    if (match(pattern, nodeId)) {
+      return renderMap.overrides[pattern];
+    }
+  }
+
+  // 2) Default mapping by semantic type
+  return renderMap.defaults[uiNode.type] || "div";
+}
+```
+
+> ⚠️ Important  
+> **UI semantics decide type**, not geometry, not CSS, not DOM.
+
+## 5) Atomic state application (no logic)
+
+### DOM example
+
+```js
+function applyAtomicState(node, nodeId, atomic, target) {
+  const atomicNode = atomic["@atomic"]?.nodes?.[nodeId];
+  if (!atomicNode) return;
+
+  if (target === "dom") {
+    // classes
+    for (const cls of atomicNode.classes || []) {
+      node.classList.add(cls);
+    }
+
+    // vars → CSS custom properties
+    for (const k in atomicNode.vars || {}) {
+      node.style.setProperty(k, atomicNode.vars[k]);
+    }
+  }
+
+  // ASXR / SVG follow same idea, different backend
+}
+```
+
+> Ghost Shell **never interprets values**.  
+> It only assigns them.
+
+## 6) Attribute projection
+
+```js
+function applyAttributes(node, uiNode, renderMap, target) {
+  const attrSpec = renderMap.attributes?.[uiNode.type];
+  if (!attrSpec) return;
+
+  for (const attr of attrSpec) {
+    if (uiNode[attr] != null) {
+      setAttribute(node, attr, uiNode[attr], target);
+    }
+  }
+}
+```
+
+Examples:
+
+* `text → data-text`
+* `button → type`
+* `image → src`
+
+Actual content binding is renderer-specific.
+
+## 7) Runtime adapters (minimal)
+
+### DOM adapter
+
+```js
+function createRuntimeNode(tag, target) {
+  if (target === "dom") return document.createElement(tag);
+  if (target === "svg") return document.createElementNS(SVG_NS, tag);
+  if (target === "asxr") return ASXR.createNode(tag);
+}
+```
+
+### Child attachment
+
+```js
+function appendChild(parent, child, target) {
+  if (target === "dom" || target === "svg") parent.appendChild(child);
+  if (target === "asxr") ASXR.append(parent, child);
+}
+```
+
+## 8) What Ghost Shell **does NOT do**
+
+❌ No layout math  
+❌ No grid calculation  
+❌ No responsive logic  
+❌ No semantic guessing  
+❌ No CSS generation
+
+All of that lives **upstream** (SCXPI).
+
+## 9) Why this is correct
+
+This enforces your core law:
+
+> **CSS + DOM are projections of state, not sources of truth**
+
+* SCXPI decides structure
+* SCXPI decides semantics
+* Atomic decides appearance
+* Ghost Shell only **renders**
+
+## 10) Minimal DOM example (conceptual)
+
+```js
+const bundle = fetchRenderBundle();
+const rootNode = GhostShellRender(bundle, "dom");
+document.body.appendChild(rootNode);
+```
+
+That’s it.  
+No frameworks. No diffing. No heuristics.
+
+## 11) Where this plugs into your stack
+
+```
+SCXPI (GAS / Server / Tool)
+        ↓
+Render Bundle (JSON)
+        ↓
+Ghost Shell
+        ↓
+DOM / ASXR / SVG / Replay
+```
+
+This is your **UI ABI**.
+
+## 12) Next logical upgrades
+
+If you want, next I can emit:
+
+1. **Ghost Shell DOM Reference Implementation (real JS)**
+2. **ASXR Renderer Adapter v1**
+3. **Hydration / Patch Renderer (diff bundles)**
+4. **Atomic → CSS compiler (static stylesheet)**
+5. **Render bundle verifier**
+
+Just say the next route.
+
+---
+
+# Ghost Shell DOM Reference Renderer v1
+
+**Consumes:** `scxpi.ui.renderer.bridge.v1`  
+**Renders:** DOM nodes (no framework)
+
+Goals:
+
+* Deterministic projection of UI semantics into DOM
+* Atomic state application (`:root` vars + per-node classes/vars)
+* Optional hydration + patch update hooks (minimal)
+* Zero inference: render_map decides tags, UI decides structure
+
+```js
+/* ============================================================================
+   GHOST SHELL — DOM Reference Renderer v1
+   Consumes: scxpi.ui.renderer.bridge.v1
+   Renders:  DOM nodes (no framework)
+   ----------------------------------------------------------------------------
+   Goals:
+   - Deterministic projection of UI semantics into DOM
+   - Atomic state application (:root vars + per-node classes/vars)
+   - Optional hydration + patch update hooks (minimal)
+   - Zero inference: render_map decides tags, UI decides structure
+   ============================================================================ */
+
+export const GhostDomRenderer = (() => {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  // ---------------------------
+  // Public API
+  // ---------------------------
+
+  /**
+   * Render the entire bundle to a DOM subtree.
+   * @param {object} bundle scxpi.ui.renderer.bridge.v1
+   * @param {object} opts
+   * @param {HTMLElement} [opts.mount] optional mount container
+   * @param {boolean} [opts.applyRootVars=true] apply atomic :root vars to mount (or documentElement)
+   * @param {boolean} [opts.useDataIds=true] set data-node-id on created nodes
+   * @param {boolean} [opts.useShadowRoot=false] create a shadow root on mount and render into it
+   * @returns {{root: HTMLElement|SVGElement, index: Record<string, Element>, unmount: Function}}
+   */
+  function render(bundle, opts = {}) {
+    assertKind(bundle, "scxpi.ui.renderer.bridge.v1");
+
+    const ui = bundle.ui;
+    const frag = bundle.atomic_fragment;
+    const map = bundle.render_map;
+
+    const mount = opts.mount || null;
+
+    const uiNodes = ui?.["@ui"]?.nodes || {};
+    const rootId = ui?.["@ui"]?.root;
+    if (!rootId || !uiNodes[rootId]) {
+      throw new Error("GhostDomRenderer: invalid ui root");
+    }
+
+    const index = Object.create(null);
+
+    // Root var application (vars-as-state)
+    if (opts.applyRootVars !== false) {
+      applyRootVars(frag, mount);
+    }
+
+    // Choose render target root
+    let targetRoot = mount || document.createElement("div");
+    if (mount && opts.useShadowRoot) {
+      const sr = mount.shadowRoot || mount.attachShadow({ mode: "open" });
+      // clear shadow root deterministically
+      while (sr.firstChild) sr.removeChild(sr.firstChild);
+      targetRoot = sr;
+    } else if (mount) {
+      // clear mount deterministically
+      while (mount.firstChild) mount.removeChild(mount.firstChild);
+    }
+
+    // Render UI tree
+    const domRoot = renderNode(rootId, null, uiNodes, frag, map, index, opts);
+
+    // Attach root
+    if (targetRoot instanceof ShadowRoot) targetRoot.appendChild(domRoot);
+    else if (targetRoot && targetRoot.appendChild) targetRoot.appendChild(domRoot);
+
+    return {
+      root: domRoot,
+      index,
+      unmount: () => {
+        if (mount) {
+          const container = mount.shadowRoot && opts.useShadowRoot ? mount.shadowRoot : mount;
+          if (container) while (container.firstChild) container.removeChild(container.firstChild);
+        } else {
+          if (domRoot && domRoot.parentNode) domRoot.parentNode.removeChild(domRoot);
+        }
+      }
+    };
+  }
+
+  /**
+   * Hydrate into an existing DOM tree that already has data-node-id attributes.
+   * - Updates atomic state + attributes, does NOT restructure DOM.
+   * @param {object} bundle scxpi.ui.renderer.bridge.v1
+   * @param {HTMLElement} root existing DOM root (container)
+   * @param {object} opts
+   * @returns {{index: Record<string, Element>}}
+   */
+  function hydrate(bundle, root, opts = {}) {
+    assertKind(bundle, "scxpi.ui.renderer.bridge.v1");
+    if (!root) throw new Error("GhostDomRenderer.hydrate: root required");
+
+    const ui = bundle.ui;
+    const frag = bundle.atomic_fragment;
+    const map = bundle.render_map;
+
+    const uiNodes = ui?.["@ui"]?.nodes || {};
+    const index = Object.create(null);
+
+    // index existing nodes by data-node-id
+    const els = root.querySelectorAll("[data-node-id]");
+    for (const el of els) {
+      const id = el.getAttribute("data-node-id");
+      if (id) index[id] = el;
+    }
+
+    // apply root vars
+    if (opts.applyRootVars !== false) applyRootVars(frag, root);
+
+    // update atomic + attrs per known ui node
+    const ids = Object.keys(uiNodes).sort();
+    for (const id of ids) {
+      const uiNode = uiNodes[id];
+      const el = index[id];
+      if (!el) continue;
+      applyAtomicNode(el, id, frag);
+      applyAttributes(el, uiNode, map);
+    }
+
+    return { index };
+  }
+
+  /**
+   * Minimal patch updater:
+   * - Re-applies root vars + per-node atomic+attrs for nodes present in index.
+   * - Does NOT restructure.
+   */
+  function patch(bundle, mounted, opts = {}) {
+    assertKind(bundle, "scxpi.ui.renderer.bridge.v1");
+    if (!mounted || !mounted.index) throw new Error("GhostDomRenderer.patch: mounted index required");
+
+    const ui = bundle.ui;
+    const frag = bundle.atomic_fragment;
+    const map = bundle.render_map;
+
+    const uiNodes = ui?.["@ui"]?.nodes || {};
+    const index = mounted.index;
+
+    if (opts.applyRootVars !== false) applyRootVars(frag, mounted.root);
+
+    const ids = Object.keys(uiNodes).sort();
+    for (const id of ids) {
+      const el = index[id];
+      if (!el) continue;
+      applyAtomicNode(el, id, frag);
+      applyAttributes(el, uiNodes[id], map);
+    }
+  }
+
+  // ---------------------------
+  // Core Render
+  // ---------------------------
+
+  function renderNode(nodeId, parentEl, uiNodes, frag, map, index, opts) {
+    const uiNode = uiNodes[nodeId];
+    if (!uiNode) return null;
+
+    const tag = resolveTag(nodeId, uiNode, map);
+    const el = createElementForTag(tag);
+
+    // Track
+    index[nodeId] = el;
+
+    // Mark id
+    if (opts.useDataIds !== false) el.setAttribute("data-node-id", nodeId);
+
+    // Apply bbox as style hints (optional, non-authoritative)
+    // If you want absolute positioning projection, turn on opts.positioning="absolute"
+    if (opts.positioning === "absolute" && uiNode.bbox) {
+      applyBBoxAbsolute(el, uiNode.bbox);
+    }
+
+    // Apply atomic + attributes
+    applyAtomicNode(el, nodeId, frag);
+    applyAttributes(el, uiNode, map);
+
+    // Optional text payload binding
+    // UI nodes produced by SCXPI may not include literal text content;
+    // if present, we bind it deterministically.
+    if (uiNode.type === "text") {
+      const t = extractText(uiNode);
+      if (t) el.textContent = t;
+    }
+
+    // Recurse children
+    const children = Array.isArray(uiNode.children) ? uiNode.children : [];
+    for (const childId of children) {
+      const childEl = renderNode(childId, el, uiNodes, frag, map, index, opts);
+      if (childEl) el.appendChild(childEl);
+    }
+
+    return el;
+  }
+
+  // ---------------------------
+  // Mapping
+  // ---------------------------
+
+  function resolveTag(nodeId, uiNode, map) {
+    const overrides = map?.overrides || {};
+    for (const pattern of Object.keys(overrides)) {
+      if (wildMatch(pattern, nodeId)) return overrides[pattern];
+    }
+    const defaults = map?.defaults || {};
+    return defaults[uiNode.type] || "div";
+  }
+
+  function createElementForTag(tag) {
+    // allow svg tags in map
+    const t = String(tag || "div").toLowerCase();
+    if (isSvgTag(t)) return document.createElementNS(SVG_NS, t);
+    return document.createElement(t);
+  }
+
+  function isSvgTag(t) {
+    // minimal set (expand as needed)
+    return (
+      t === "svg" ||
+      t === "path" ||
+      t === "g" ||
+      t === "circle" ||
+      t === "rect" ||
+      t === "line" ||
+      t === "text"
+    );
+  }
+
+  // ---------------------------
+  // Atomic application
+  // ---------------------------
+
+  function applyRootVars(frag, mountOrRoot) {
+    const vars = frag?.["@atomic"]?.[":root"]?.vars || {};
+    const target = pickRootVarTarget(mountOrRoot);
+
+    // deterministic key order
+    for (const k of Object.keys(vars).sort()) {
+      target.style.setProperty(k, String(vars[k]));
+    }
+  }
+
+  function pickRootVarTarget(mountOrRoot) {
+    // If rendering inside a container, use that container as var scope
+    // else default to documentElement.
+    if (mountOrRoot && mountOrRoot.nodeType === 1) return mountOrRoot; // HTMLElement
+    return document.documentElement;
+  }
+
+  function applyAtomicNode(el, nodeId, frag) {
+    const n = frag?.["@atomic"]?.nodes?.[nodeId];
+    if (!n) return;
+
+    // classes: replace strategy keeps deterministic state
+    // (prevents class accumulation across patches)
+    const base = el.getAttribute("data-base-classes") || "";
+    const baseSet = base ? base.split(/\s+/).filter(Boolean) : [];
+
+    // Save base classes once
+    if (!el.hasAttribute("data-base-classes")) {
+      el.setAttribute("data-base-classes", el.className || "");
+    }
+
+    const classes = Array.isArray(n.classes) ? n.classes.slice().map(String) : [];
+    classes.sort();
+    const merged = uniq(baseSet.concat(classes)).join(" ");
+    el.className = merged;
+
+    // vars: deterministic ordering
+    const vars = n.vars || {};
+    for (const k of Object.keys(vars).sort()) {
+      el.style.setProperty(k, String(vars[k]));
+    }
+  }
+
+  // ---------------------------
+  // Attributes
+  // ---------------------------
+
+  function applyAttributes(el, uiNode, map) {
+    // attribute allowlist by semantic type
+    const allow = map?.attributes?.[uiNode.type];
+    if (!Array.isArray(allow)) return;
+
+    for (const a of allow) {
+      if (uiNode[a] == null) continue;
+      setAttr(el, a, uiNode[a]);
+    }
+
+    // Minimal convenience bindings
+    if (uiNode.type === "image") {
+      // if source exists, map to src
+      const src = uiNode.src || uiNode?.source?.href || uiNode?.source?.url;
+      if (src) el.setAttribute("src", String(src));
+    }
+    if (uiNode.type === "button") {
+      // if there's an action id
+      const act = uiNode.action || uiNode?.source?.ref;
+      if (act) el.setAttribute("data-action", String(act));
+      if (!el.getAttribute("type")) el.setAttribute("type", "button");
+    }
+  }
+
+  function setAttr(el, name, value) {
+    const n = String(name);
+    // map data-text to textContent for text nodes if desired
+    if (n === "data-text") {
+      el.setAttribute("data-text", String(value));
+      return;
+    }
+    el.setAttribute(n, String(value));
+  }
+
+  // ---------------------------
+  // BBox projection (optional)
+  // bbox = {x,y,w,h} normalized [0..1]
+  // ---------------------------
+
+  function applyBBoxAbsolute(el, bbox) {
+    const x = clamp01(Number(bbox.x));
+    const y = clamp01(Number(bbox.y));
+    const w = clamp01(Number(bbox.w));
+    const h = clamp01(Number(bbox.h));
+
+    el.style.position = "absolute";
+    el.style.left = (x * 100) + "%";
+    el.style.top = (y * 100) + "%";
+    el.style.width = (w * 100) + "%";
+    el.style.height = (h * 100) + "%";
+  }
+
+  // ---------------------------
+  // Text extraction
+  // ---------------------------
+
+  function extractText(uiNode) {
+    // prefer explicit fields if upstream provides them
+    if (typeof uiNode.text === "string") return uiNode.text;
+    if (typeof uiNode["data-text"] === "string") return uiNode["data-text"];
+
+    // if atomic hints stored it, prefer that
+    return "";
+  }
+
+  // ---------------------------
+  // Helpers
+  // ---------------------------
+
+  function assertKind(obj, kind) {
+    if (!obj || obj["@kind"] !== kind) throw new Error(`GhostDomRenderer: expected ${kind}`);
+  }
+
+  function wildMatch(pattern, str) {
+    // very small wildcard matcher: * only
+    pattern = String(pattern);
+    str = String(str);
+    if (pattern === "*") return true;
+    const parts = pattern.split("*").map(escapeRegExp);
+    const re = new RegExp("^" + parts.join(".*") + "$");
+    return re.test(str);
+  }
+
+  function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function uniq(arr) {
+    const seen = Object.create(null);
+    const out = [];
+    for (const v of arr) {
+      const k = String(v);
+      if (seen[k]) continue;
+      seen[k] = 1;
+      out.push(k);
+    }
+    return out;
+  }
+
+  function clamp01(x) {
+    x = Number(x);
+    if (!isFinite(x)) return 0;
+    return Math.max(0, Math.min(1, x));
+  }
+
+  return { render, hydrate, patch };
+})();
+
+/* ============================================================================
+   Example usage
+   ============================================================================ */
+
+/**
+ * Example: render into a mount element.
+ *
+ * import { GhostDomRenderer } from "./ghost-dom-renderer.js"
+ * const mounted = GhostDomRenderer.render(bundle, { mount: document.querySelector("#app") })
+ */
+
+/**
+ * Example: patch update (re-apply atomic vars/classes/attrs).
+ * GhostDomRenderer.patch(nextBundle, mounted)
+ */
+```
+
+---
+
+# ASXR Native Renderer Mapping v1
+
+**Consumes:** `scxpi.ui.renderer.bridge.v1`  
+**Emits:** ASXR-native render plan + minimal adapter hooks
+
+Purpose:
+
+* Keep DOM-neutral bundle as the ABI
+* Provide an ASXR-specific projection map + render plan that an ASXR engine can execute
+
+```js
+/* ============================================================================
+   ASXR Native Renderer Mapping v1
+   Consumes: scxpi.ui.renderer.bridge.v1
+   Emits:    ASXR-native render plan + minimal adapter hooks
+   ----------------------------------------------------------------------------
+   Purpose:
+   - Keep DOM-neutral bundle as the ABI
+   - Provide an ASXR-specific projection map + render plan that an ASXR engine
+     can execute (service worker, runtime kernel, or in-page ASXR host).
+   ============================================================================ */
+
+/* ============================================================================
+   1) ASXR Render Map v1 (projection contract)
+   ----------------------------------------------------------------------------
+   - maps semantic UI node types -> ASXR component kinds
+   - attaches atomic classes/vars as state fields (no CSS required)
+   - allows "slots" + "props" binding without DOM
+   ============================================================================ */
+
+export function SCXPI_ASXR_RENDER_MAP_V1(opts = {}) {
+  return {
+    "@kind": "scxpi.render.map.asxr.v1",
+    "@v": 1,
+
+    // semantic -> asxr-native node kind
+    defaults: {
+      canvas: "asxr.scene",
+      container: "asxr.panel",
+      panel: "asxr.panel",
+      sidebar: "asxr.sidebar",
+      header: "asxr.header",
+      footer: "asxr.footer",
+
+      row: "asxr.flex",
+      col: "asxr.flex",
+
+      card: "asxr.card",
+      button: "asxr.button",
+      text: "asxr.text",
+      icon: "asxr.icon",
+      image: "asxr.image",
+      divider: "asxr.divider",
+      shape: "asxr.shape"
+    },
+
+    // Optional wildcard overrides by node id
+    overrides: {
+      // "ui_header_*": "asxr.header",
+      // "ui_sidebar_*": "asxr.sidebar"
+    },
+
+    // attribute allowlist by semantic node type (copied from bundle ui nodes)
+    attributes: {
+      button: ["action", "type", "label"],
+      image: ["src", "alt"],
+      text: ["text"],
+      icon: ["name", "viewBox"]
+    },
+
+    // ASXR slot semantics: which field holds children
+    slot_policy: {
+      "asxr.scene": "children",
+      "asxr.panel": "children",
+      "asxr.sidebar": "children",
+      "asxr.header": "children",
+      "asxr.footer": "children",
+      "asxr.flex": "children",
+      "asxr.card": "children"
+    },
+
+    // how to treat bbox if present (normalized 0..1)
+    bbox_policy: opts.bbox_policy || {
+      mode: "constraints", // "constraints" | "absolute" | "ignore"
+      field: "layout" // attach to node.layout
+    },
+
+    // atomic state binding rules
+    atomic_binding: {
+      classes_field: "state.classes", // array
+      vars_field: "state.vars" // object
+    }
+  };
+}
+
+/* ============================================================================
+   2) ASXR Render Plan v1 (executable-by-ASXR, but still state-only)
+   ----------------------------------------------------------------------------
+   A render plan is a pure JSON tree:
+   - nodes keyed by id
+   - each node has:
+       kind (asxr.*)
+       props (attributes)
+       state (atomic)
+       layout (bbox policy)
+       children (slots)
+   ============================================================================ */
+
+export function SCXPI_ASXR_RENDER_PLAN_FROM_BUNDLE(bundle, opts = {}) {
+  assertKind(bundle, "scxpi.ui.renderer.bridge.v1");
+
+  const ui = bundle.ui;
+  const atomic = bundle.atomic_fragment;
+  const map = opts.map || SCXPI_ASXR_RENDER_MAP_V1(opts);
+
+  const uiNodes = ui?.["@ui"]?.nodes || {};
+  const rootId = ui?.["@ui"]?.root;
+  if (!rootId || !uiNodes[rootId]) throw new Error("ASXR plan: invalid UI root");
+
+  const planNodes = Object.create(null);
+
+  // Apply root vars as global ASXR state
+  const rootVars = atomic?.["@atomic"]?.[":root"]?.vars || {};
+
+  // Build recursively
+  const rootPlanId = build(rootId, null);
+
+  return {
+    "@kind": "scxpi.asxr.render.plan.v1",
+    "@v": 1,
+    meta: {
+      source_kind: bundle.meta?.source || "unknown",
+      targets: ["asxr"],
+      generated_at: Date.now()
+    },
+    globals: {
+      // This is how ASXR can set global state variables
+      // (Atomic Variables-as-State, but not tied to CSS)
+      vars: orderedObj(rootVars)
+    },
+    root: rootPlanId,
+    nodes: orderedNodes(planNodes)
+  };
+
+  // ---------------------------
+
+  function build(nodeId, parentId) {
+    const u = uiNodes[nodeId];
+    if (!u) return null;
+
+    const kind = resolveAsxrKind(nodeId, u, map);
+    const children = Array.isArray(u.children) ? u.children.slice() : [];
+
+    const node = {
+      id: nodeId,
+      kind,
+      parent: parentId || null,
+
+      // props: safe attribute subset
+      props: extractProps(u, map),
+
+      // state: atomic classes + vars
+      state: extractAtomicState(nodeId, atomic),
+
+      // layout: bbox policy
+      layout: extractLayout(u, map),
+
+      // children placed under slot policy
+      children: []
+    };
+
+    planNodes[nodeId] = node;
+
+    for (const childId of children) {
+      const cid = build(childId, nodeId);
+      if (cid) node.children.push(cid);
+    }
+
+    return nodeId;
+  }
+}
+
+/* ============================================================================
+   3) ASXR Adapter Hooks (how an ASXR runtime would execute the plan)
+   ----------------------------------------------------------------------------
+   These are reference interfaces. Your ASXR engine can implement them
+   with real rendering (DOM, WebGL, SVG-3D, etc.)
+   ============================================================================ */
+
+/**
+ * @interface ASXRHost
+ * create(kind: string, id: string): any
+ * setProps(nodeHandle, props): void
+ * setState(nodeHandle, state): void
+ * setLayout(nodeHandle, layout): void
+ * append(parentHandle, childHandle): void
+ * mount(rootHandle, mountPoint?): void
+ */
+export function ASXR_EXECUTE_RENDER_PLAN(plan, host, opts = {}) {
+  assertKind(plan, "scxpi.asxr.render.plan.v1");
+
+  const nodes = plan.nodes || {};
+  const rootId = plan.root;
+  if (!rootId || !nodes[rootId]) throw new Error("ASXR execute: invalid root");
+
+  // Create handles
+  const handles = Object.create(null);
+
+  // Deterministic creation order
+  const ids = Object.keys(nodes).sort();
+  for (const id of ids) {
+    const n = nodes[id];
+    handles[id] = host.create(n.kind, id);
+
+    host.setProps(handles[id], n.props || {});
+    host.setState(handles[id], n.state || {});
+    host.setLayout(handles[id], n.layout || {});
+  }
+
+  // Deterministic parent-child wiring
+  for (const id of ids) {
+    const n = nodes[id];
+    const parentId = n.parent;
+    if (!parentId) continue;
+    host.append(handles[parentId], handles[id]);
+  }
+
+  // Apply globals (vars) if host supports it
+  if (host.setGlobals) host.setGlobals(plan.globals || {});
+
+  // Mount
+  host.mount(handles[rootId], opts.mount);
+  return { root: handles[rootId], handles };
+}
+
+/* ============================================================================
+   4) Helpers
+   ============================================================================ */
+
+function resolveAsxrKind(nodeId, uiNode, map) {
+  const overrides = map.overrides || {};
+  for (const pattern of Object.keys(overrides)) {
+    if (wildMatch(pattern, nodeId)) return overrides[pattern];
+  }
+  return (map.defaults || {})[uiNode.type] || "asxr.panel";
+}
+
+function extractProps(uiNode, map) {
+  const allow = map.attributes?.[uiNode.type];
+  const props = {};
+  if (Array.isArray(allow)) {
+    for (const k of allow) {
+      if (uiNode[k] != null) props[k] = uiNode[k];
+    }
+  }
+
+  // Minimal convenience bindings (optional)
+  if (uiNode.type === "text") {
+    if (typeof uiNode.text === "string") props.text = uiNode.text;
+  }
+  if (uiNode.type === "image") {
+    const src = uiNode.src || uiNode?.source?.href || uiNode?.source?.url;
+    if (src) props.src = src;
+  }
+  if (uiNode.type === "button") {
+    if (uiNode.action) props.action = uiNode.action;
+    if (uiNode.label) props.label = uiNode.label;
+  }
+
+  return props;
+}
+
+function extractAtomicState(nodeId, atomic) {
+  const n = atomic?.["@atomic"]?.nodes?.[nodeId];
+  const classes = Array.isArray(n?.classes) ? n.classes.slice().map(String).sort() : [];
+  const vars = orderedObj(n?.vars || {});
+  return { classes, vars };
+}
+
+function extractLayout(uiNode, map) {
+  const policy = map.bbox_policy || { mode: "ignore" };
+  if (policy.mode === "ignore") return {};
+
+  const bb = uiNode.bbox;
+  if (!bb) return {};
+
+  if (policy.mode === "absolute") {
+    // normalized absolute placement
+    return {
+      mode: "absolute",
+      x: clamp01(bb.x),
+      y: clamp01(bb.y),
+      w: clamp01(bb.w),
+      h: clamp01(bb.h)
+    };
+  }
+
+  // constraints mode (recommended for ASXR)
+  return {
+    mode: "constraints",
+    rect: { x: clamp01(bb.x), y: clamp01(bb.y), w: clamp01(bb.w), h: clamp01(bb.h) },
+    // ASXR engine decides exact constraints implementation
+    constraints: {
+      left: clamp01(bb.x),
+      top: clamp01(bb.y),
+      right: clamp01(bb.x + bb.w),
+      bottom: clamp01(bb.y + bb.h)
+    }
+  };
+}
+
+function orderedObj(o) {
+  o = o || {};
+  const out = {};
+  for (const k of Object.keys(o).sort()) out[k] = o[k];
+  return out;
+}
+
+function orderedNodes(nodes) {
+  // keep as object, but ensure deterministic key ordering when serialized
+  const ids = Object.keys(nodes).sort();
+  const out = {};
+  for (const id of ids) out[id] = nodes[id];
+  return out;
+}
+
+function assertKind(obj, kind) {
+  if (!obj || obj["@kind"] !== kind) throw new Error(`Expected ${kind}`);
+}
+
+function wildMatch(pattern, str) {
+  pattern = String(pattern);
+  str = String(str);
+  if (pattern === "*") return true;
+  const parts = pattern.split("*").map(escapeRegExp);
+  const re = new RegExp("^" + parts.join(".*") + "$");
+  return re.test(str);
+}
+
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function clamp01(x) {
+  x = Number(x);
+  if (!isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+/* ============================================================================
+   5) Example: Build plan from bundle + execute with a host
+   ----------------------------------------------------------------------------
+   const plan = SCXPI_ASXR_RENDER_PLAN_FROM_BUNDLE(bundle, { bbox_policy: { mode:"constraints" } })
+   ASXR_EXECUTE_RENDER_PLAN(plan, MyAsxrHost, { mount: document.querySelector("#app") })
+   ============================================================================ */
+```
+
+---
+
+# JSON_TEMPLATE_POOL_v1
+
+## What it is
+
+A pool of **design blueprints** for:
+
+* apps, websites, landing pages, CTAs
+* glass-morphic UI kits / sections
+* dashboards / link managers
+* icon dock widgets (static)
+* component packs (cards, headers, footers, navs, pricing tables)
+
+These blueprints are **not freeform**. They are stored as **typed JSON** with **schema** and **slots**.
+
+## Diagram
+
+```
+Template Pool (JSON Sheets)
+  ├─ templates[]  (blueprints)
+  ├─ schema_map   (how to interpret each template kind)
+  ├─ slots        (fill-in fields)
+  └─ tags/index   (query & retrieval)
+
+          ↓ select (KQL / rules / LLM suggestion)
+     template_id + slot_values
+          ↓ compile
+   xjson.ui.v1 + atomic.xjson.fragment.v1
+          ↓
+   render bundle (Route A)
+          ↓
+   Ghost/ASXR render + patch
+```
+
+## 1) File Tree Layout
+
+```
+templates/
+  pool.json                        (registry + index)
+  schemas/
+    tpl.meta.v1.json
+    tpl.landing.v1.json
+    tpl.app.shell.v1.json
+    tpl.link.manager.v1.json
+    tpl.glass.kit.v1.json
+  sheets/
+    landing/
+      landing.hero_split.v1.json
+      landing.pricing_3tier.v1.json
+      landing.cta_banner.v1.json
+    apps/
+      app.shell_3panel_ghost.v1.json
+      app.dashboard_cards.v1.json
+    widgets/
+      widget.icon_dock.v1.json
+      widget.link_grid.v1.json
+    kits/
+      kit.glass_morphic_core.v1.json
+      kit.glass_sidebar_nav.v1.json
+```
+
+## 2) Pool Registry (pool.json)
+
+```json
+{
+  "$schema": "xjson://schema/core/v1",
+  "@kind": "template.pool.v1",
+  "@v": 1,
+  "@meta": {
+    "id": "ASX_TEMPLATE_POOL_CORE",
+    "notes": "Raw JSON blueprints for deterministic conceptual builds."
+  },
+  "index": {
+    "by_tag": {},
+    "by_kind": {}
+  },
+  "templates": [
+    {
+      "template_id": "landing.hero_split.v1",
+      "kind": "tpl.landing.section.v1",
+      "title": "Hero Split (Headline + CTA + Mock)",
+      "tags": ["landing", "hero", "cta", "glass", "split"],
+      "schema": "tpl.landing.v1",
+      "sheet_ref": "sheets/landing/landing.hero_split.v1.json"
+    },
+    {
+      "template_id": "app.shell_3panel_ghost.v1",
+      "kind": "tpl.app.shell.v1",
+      "title": "Ghost 3-Panel App Shell",
+      "tags": ["app", "shell", "ghost", "3panel", "glass"],
+      "schema": "tpl.app.shell.v1",
+      "sheet_ref": "sheets/apps/app.shell_3panel_ghost.v1.json"
+    },
+    {
+      "template_id": "widget.icon_dock.v1",
+      "kind": "tpl.widget.v1",
+      "title": "Static Icon Dock Widget",
+      "tags": ["widget", "dock", "icons", "launcher"],
+      "schema": "tpl.glass.kit.v1",
+      "sheet_ref": "sheets/widgets/widget.icon_dock.v1.json"
+    }
+  ]
+}
+```
+
+> In GAS, these can live in Drive, Sheets-as-JSON, Supabase, or even hardcoded as JSON files in your repo.  
+> The key is: **template is retrieved by ID and must validate.**
+
+## 3) Template Sheet Format (raw blueprint)
+
+Each sheet is **pure JSON** with:
+
+* `@kind`
+* `slots` (fillable fields)
+* `ui` (xjson.ui.v1 fragment)
+* `atomic_fragment` (atomic.xjson.fragment.v1 fragment)
+* optional `render_map_overrides`
+
+### Example: landing.hero_split.v1.json
+
+```json
+{
+  "@kind": "tpl.landing.section.v1",
+  "@v": 1,
+  "template_id": "landing.hero_split.v1",
+  "slots": {
+    "headline": { "type": "string", "default": "Ship faster with ASX" },
+    "subhead": { "type": "string", "default": "Deterministic UI from symbolic geometry." },
+    "cta_primary": { "type": "string", "default": "Get Started" },
+    "cta_secondary": { "type": "string", "default": "See Demo" }
+  },
+  "ui_fragment": {
+    "@kind": "xjson.ui.fragment.v1",
+    "root": "ui_hero",
+    "nodes": {
+      "ui_hero": { "type": "container", "children": ["ui_left", "ui_right"] },
+      "ui_left": { "type": "col", "children": ["ui_h1", "ui_p", "ui_cta_row"] },
+      "ui_h1": { "type": "text", "text_slot": "headline" },
+      "ui_p": { "type": "text", "text_slot": "subhead" },
+      "ui_cta_row": { "type": "row", "children": ["ui_btn_primary", "ui_btn_secondary"] },
+      "ui_btn_primary": { "type": "button", "label_slot": "cta_primary", "action": "primary" },
+      "ui_btn_secondary": { "type": "button", "label_slot": "cta_secondary", "action": "secondary" },
+      "ui_right": { "type": "card", "children": ["ui_mock"] },
+      "ui_mock": { "type": "text", "text": "Mock / Screenshot" }
+    }
+  },
+  "atomic_fragment": {
+    "@kind": "atomic.xjson.fragment.v1",
+    "@v": 1,
+    "@meta": { "id": "landing.hero_split.atomic" },
+    "@atomic": {
+      ":root": {
+        "vars": {
+          "--asx-gap": 0.5,
+          "--asx-radius": 0.65,
+          "--asx-elevation": 0.55
+        }
+      },
+      "nodes": {
+        "ui_hero": { "classes": ["asx-container", "asx-grid"], "vars": { "--asx-grid-cols": 2 } },
+        "ui_right": { "classes": ["asx-card", "asx-surface"], "vars": {} },
+        "ui_btn_primary": { "classes": ["asx-btn", "asx-primary"], "vars": {} },
+        "ui_btn_secondary": { "classes": ["asx-btn", "asx-secondary"], "vars": {} }
+      }
+    }
+  }
+}
+```
+
+## 4) Slot Filling (deterministic)
+
+You need a tiny compiler:
+
+**template sheet + slot values → xjson.ui.v1 + atomic fragment → render bundle**
+
+### Slot compiler rules
+
+* `text_slot` → fills `text`
+* `label_slot` → fills `label`
+* missing values → defaults
+* unknown slots → ignored
+
+## 5) Template Compiler v1 (real JS)
+
+```js
+export function compileTemplateToBridge(templateSheet, slotValues = {}, renderMap = null) {
+  // 1) resolve slots
+  const slots = templateSheet.slots || {};
+  const resolved = {};
+  for (const k of Object.keys(slots)) {
+    const def = slots[k]?.default;
+    resolved[k] = (slotValues[k] != null) ? slotValues[k] : def;
+  }
+
+  // 2) build xjson.ui.v1 from ui_fragment
+  const frag = templateSheet.ui_fragment;
+  const nodes = JSON.parse(JSON.stringify(frag.nodes || {}));
+
+  for (const id of Object.keys(nodes)) {
+    const n = nodes[id];
+
+    if (n.text_slot && resolved[n.text_slot] != null) {
+      n.text = String(resolved[n.text_slot]);
+      delete n.text_slot;
+    }
+    if (n.label_slot && resolved[n.label_slot] != null) {
+      n.label = String(resolved[n.label_slot]);
+      delete n.label_slot;
+    }
+  }
+
+  const ui = {
+    "@kind": "xjson.ui.v1",
+    "@v": 1,
+    "@ui": {
+      root: frag.root,
+      nodes
+    }
+  };
+
+  // 3) atomic fragment passthrough
+  const atomic_fragment = templateSheet.atomic_fragment;
+
+  // 4) render map (optional override)
+  const rm = renderMap || {
+    "@kind": "scxpi.render.map.v1",
+    "@v": 1,
+    defaults: {
+      container: "div",
+      row: "div",
+      col: "div",
+      card: "div",
+      text: "p",
+      button: "button"
+    },
+    overrides: {},
+    attributes: {
+      button: ["type", "data-action"],
+      text: ["data-text"],
+      image: ["src", "alt"]
+    },
+    slot_policy: { container: "children", row: "children", col: "children", card: "children" }
+  };
+
+  // 5) bridge bundle
+  return {
+    "@kind": "scxpi.ui.renderer.bridge.v1",
+    "@v": 1,
+    ui,
+    atomic_fragment,
+    render_map: rm,
+    meta: {
+      source: "template_pool",
+      template_id: templateSheet.template_id,
+      slots: resolved
+    }
+  };
+}
+```
+
+This gives you **direct LLM conversational ability** safely:
+
+* LLM suggests `template_id` + `slotValues`
+* runtime compiles deterministically
+* Ghost shell renders it with your renderer + patcher
+
+## 6) How the LLM fits (without taking over)
+
+LLM is allowed to output ONLY:
+
+```json
+{
+  "template_id": "landing.hero_split.v1",
+  "slots": {
+    "headline": "Launch your next app in one night",
+    "subhead": "A glass UI kit with deterministic structure.",
+    "cta_primary": "Start Free",
+    "cta_secondary": "View Templates"
+  }
+}
+```
+
+Then your runtime does:
+
+1. lookup template sheet by `template_id`
+2. validate kind/schema
+3. compile
+4. render bundle → Ghost patch render
+
+No “magic pulling designs” without mapped sheets.
+
+## 7) Next possible routes (for this template pool)
+
+### Route T1 — KQL Template Query Layer
+
+* `SELECT template_id FROM templates WHERE tags CONTAINS 'landing' AND tags CONTAINS 'glass'`
+
+### Route T2 — Template Scoring (π)
+
+* score templates by “fit” using your structural weights
+* still only selects from the pool
+
+### Route T3 — Template → Atomic Kit Binding
+
+* auto-attach `kit.glass_morphic_core.v1` to any template
+
+### Route T4 — Template Patches
+
+* a “theme patch” that swaps atomic vars (radius/gap/elevation) across all templates
+
+### Route T5 — Template Exporter
+
+* export compiled bundles as static site pages or app panels
+
+---
+
+# TEMPLATE_POOL_QUERY_KQL_v1
+
+## Contract (XJSON-ish schema)
+
+```json
+{
+  "$schema": "xjson://schema/core/v1",
+  "@kind": "template.pool.query.kql.v1",
+  "@v": 1,
+  "query": {
+    "SELECT": { "fields": ["template_id", "title", "tags", "kind", "schema", "sheet_ref"] },
+    "FROM": { "source": "TEMPLATE_POOL" },
+    "WHERE": {
+      "AND": [
+        { "tags_has_any": ["landing", "cta"] },
+        { "tags_has_all": ["glass"] },
+        { "kind_in": ["tpl.landing.section.v1"] },
+        { "text_contains": { "field": "title", "q": "Hero" } }
+      ]
+    },
+    "LIMIT": 10,
+    "ORDER_BY": [{ "field": "score", "dir": "desc" }]
+  }
+}
+```
+
+### Supported WHERE operators (v1, locked)
+
+* `tags_has_any: [tag...]`
+* `tags_has_all: [tag...]`
+* `kind_in: [kind...]`
+* `schema_in: [schema...]`
+* `text_contains: { field: "title"|"template_id", q: "..." }`
+* `id_in: [template_id...]`
+
+### Scoring (deterministic)
+
+A query result can include a computed `score`:
+
+* +2 per tag match in `tags_has_all`
+* +1 per tag match in `tags_has_any`
+* +2 if kind matches
+* +1 if schema matches
+* +1 if text match
+
+## GAS implementation — KQL executor
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_QUERY_KQL_v1  (GAS)
+// Deterministic query over pool registry entries
+// ============================================================================
+
+function TEMPLATE_POOL_QUERY_KQL(pool, kql) {
+  if (!pool || pool["@kind"] !== "template.pool.v1") throw new Error("pool must be template.pool.v1");
+  if (!kql || kql["@kind"] !== "template.pool.query.kql.v1") throw new Error("kql must be template.pool.query.kql.v1");
+
+  var q = (kql.query || {});
+  var selectFields = ((q.SELECT || {}).fields) || ["template_id"];
+  var where = (q.WHERE || {});
+  var limit = (q.LIMIT != null) ? Number(q.LIMIT) : 50;
+
+  var templates = pool.templates || [];
+  var matches = [];
+
+  for (var i = 0; i < templates.length; i++) {
+    var t = templates[i];
+    var evalRes = TEMPLATE_POOL__EVAL_WHERE(t, where);
+    if (!evalRes.ok) continue;
+
+    var row = TEMPLATE_POOL__PICK_FIELDS(t, selectFields);
+    row.score = evalRes.score;
+    matches.push(row);
+  }
+
+  // ORDER BY
+  var orderBy = q.ORDER_BY || [];
+  if (orderBy.length) {
+    matches.sort(function(a, b) {
+      for (var j = 0; j < orderBy.length; j++) {
+        var ob = orderBy[j] || {};
+        var f = ob.field || "score";
+        var dir = String(ob.dir || "desc").toLowerCase();
+        var av = (a[f] != null) ? a[f] : 0;
+        var bv = (b[f] != null) ? b[f] : 0;
+        if (av === bv) continue;
+        return (dir === "asc") ? (av < bv ? -1 : 1) : (av > bv ? -1 : 1);
+      }
+      return 0;
+    });
+  } else {
+    // default: score desc
+    matches.sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+  }
+
+  // LIMIT
+  if (matches.length > limit) matches = matches.slice(0, limit);
+
+  return {
+    "@kind": "template.pool.query.result.v1",
+    "@v": 1,
+    count: matches.length,
+    rows: matches
+  };
+}
+
+// ---------------------------
+// WHERE evaluation
+// ---------------------------
+
+function TEMPLATE_POOL__EVAL_WHERE(t, where) {
+  // WHERE supports:
+  // { AND: [cond...] } or a single cond
+  if (!where || Object.keys(where).length === 0) return { ok: true, score: 0 };
+
+  var andList = where.AND ? where.AND : [where];
+  var score = 0;
+
+  for (var i = 0; i < andList.length; i++) {
+    var c = andList[i] || {};
+
+    // tags_has_any
+    if (c.tags_has_any) {
+      var s1 = TEMPLATE_POOL__SCORE_TAGS_ANY(t.tags || [], c.tags_has_any);
+      if (s1 === 0) return { ok: false, score: 0 };
+      score += s1; // +1 per any match
+    }
+
+    // tags_has_all
+    if (c.tags_has_all) {
+      var s2 = TEMPLATE_POOL__SCORE_TAGS_ALL(t.tags || [], c.tags_has_all);
+      if (s2 < 0) return { ok: false, score: 0 };
+      score += s2; // +2 per required match
+    }
+
+    // kind_in
+    if (c.kind_in) {
+      if (c.kind_in.indexOf(t.kind) === -1) return { ok: false, score: 0 };
+      score += 2;
+    }
+
+    // schema_in
+    if (c.schema_in) {
+      if (c.schema_in.indexOf(t.schema) === -1) return { ok: false, score: 0 };
+      score += 1;
+    }
+
+    // id_in
+    if (c.id_in) {
+      if (c.id_in.indexOf(t.template_id) === -1) return { ok: false, score: 0 };
+      score += 1;
+    }
+
+    // text_contains
+    if (c.text_contains) {
+      var field = c.text_contains.field || "title";
+      var q = String(c.text_contains.q || "").toLowerCase();
+      var v = String(t[field] || "").toLowerCase();
+      if (q && v.indexOf(q) === -1) return { ok: false, score: 0 };
+      if (q) score += 1;
+    }
+  }
+
+  return { ok: true, score: score };
+}
+
+function TEMPLATE_POOL__SCORE_TAGS_ANY(have, want) {
+  var set = TEMPLATE_POOL__SET(have);
+  var s = 0;
+  for (var i = 0; i < want.length; i++) if (set[want[i]]) s += 1;
+  return s;
+}
+
+function TEMPLATE_POOL__SCORE_TAGS_ALL(have, want) {
+  var set = TEMPLATE_POOL__SET(have);
+  var s = 0;
+  for (var i = 0; i < want.length; i++) {
+    if (!set[want[i]]) return -1;
+    s += 2;
+  }
+  return s;
+}
+
+function TEMPLATE_POOL__SET(arr) {
+  var o = {};
+  arr = arr || [];
+  for (var i = 0; i < arr.length; i++) o[String(arr[i])] = 1;
+  return o;
+}
+
+function TEMPLATE_POOL__PICK_FIELDS(obj, fields) {
+  var out = {};
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    out[f] = obj[f];
+  }
+  return out;
+}
+```
+
+---
+
+# TEMPLATE_POOL_LOADER_GAS_v1
+
+You get **two loaders**:
+
+1. **Drive JSON Loader** — pool.json + template sheets stored as `.json` files in Drive folders
+2. **Sheets Loader** — template registry stored as a Google Sheet, and each blueprint sheet stored as either:
+
+   * a JSON string cell, or
+   * multi-row “raw fields” you assemble into JSON (v1 supports JSON-cell first; raw-fields second)
+
+## A) Drive JSON Loader (pool.json + blueprint sheets)
+
+### Config idea
+
+* `pool.json` file in Drive
+* each template sheet file path is stored as `sheet_ref` like:
+  `drive:fileId:<FILE_ID>` **or** `drive:path:/templates/sheets/landing/landing.hero_split.v1.json`
+
+### GAS code
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_LOADER_GAS_v1 — Drive JSON
+// ============================================================================
+
+function TEMPLATE_POOL_LOAD_FROM_DRIVE_POOLJSON(fileId) {
+  var txt = DriveApp.getFileById(fileId).getBlob().getDataAsString("UTF-8");
+  var pool = JSON.parse(txt);
+  if (pool["@kind"] !== "template.pool.v1") throw new Error("pool.json kind mismatch");
+  return pool;
+}
+
+// sheet_ref forms supported:
+//  - "drive:fileId:<ID>"
+//  - "drive:path:/some/folder/file.json"  (relative to root; requires search)
+function TEMPLATE_POOL_LOAD_TEMPLATE_SHEET_DRIVE(sheet_ref) {
+  var ref = String(sheet_ref || "");
+  if (ref.indexOf("drive:fileId:") === 0) {
+    var id = ref.slice("drive:fileId:".length);
+    return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString("UTF-8"));
+  }
+  if (ref.indexOf("drive:path:") === 0) {
+    var path = ref.slice("drive:path:".length);
+    var file = TEMPLATE_POOL__FIND_FILE_BY_PATH(path);
+    if (!file) throw new Error("No file at path: " + path);
+    return JSON.parse(file.getBlob().getDataAsString("UTF-8"));
+  }
+  throw new Error("Unsupported sheet_ref: " + ref);
+}
+
+function TEMPLATE_POOL__FIND_FILE_BY_PATH(path) {
+  // Simple path resolver via folder traversal from "My Drive"
+  // path like "/templates/sheets/landing/landing.hero_split.v1.json"
+  path = String(path || "").replace(/^\/+/, "");
+  var parts = path.split("/").filter(function(x) { return x; });
+  if (!parts.length) return null;
+
+  var folder = DriveApp.getRootFolder();
+  for (var i = 0; i < parts.length; i++) {
+    var name = parts[i];
+    var isLast = (i === parts.length - 1);
+    if (isLast) {
+      var files = folder.getFilesByName(name);
+      return files.hasNext() ? files.next() : null;
+    } else {
+      var it = folder.getFoldersByName(name);
+      if (!it.hasNext()) return null;
+      folder = it.next();
+    }
+  }
+  return null;
+}
+```
+
+## B) Sheets Loader (registry + blueprints)
+
+### Recommended sheet layout (registry)
+
+**Sheet tab:** `templates`
+
+Columns:
+
+* `template_id`
+* `kind`
+* `title`
+* `tags` (comma-separated)
+* `schema`
+* `sheet_ref` (one of:)
+
+  * `sheet:JSON:<spreadsheetId>:<tabName>:<cellA1>` (single cell contains JSON string)
+  * `sheet:ROWJSON:<spreadsheetId>:<tabName>:<rowNumber>` (row contains JSON string in a `json` column)
+  * `drive:fileId:<ID>` (still allowed)
+
+### GAS code
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_LOADER_GAS_v1 — Sheets registry loader
+// ============================================================================
+
+function TEMPLATE_POOL_LOAD_FROM_SHEET_REGISTRY(spreadsheetId, tabName) {
+  tabName = tabName || "templates";
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  var sh = ss.getSheetByName(tabName);
+  if (!sh) throw new Error("Missing tab: " + tabName);
+
+  var values = sh.getDataRange().getValues();
+  if (values.length < 2) throw new Error("Registry sheet empty");
+
+  var header = values[0].map(String);
+  var idx = TEMPLATE_POOL__HEADER_INDEX(header);
+
+  var templates = [];
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var template_id = String(row[idx.template_id] || "").trim();
+    if (!template_id) continue;
+
+    var tags = String(row[idx.tags] || "")
+      .split(",")
+      .map(function(s) { return s.trim(); })
+      .filter(function(s) { return s; });
+
+    templates.push({
+      template_id: template_id,
+      kind: String(row[idx.kind] || ""),
+      title: String(row[idx.title] || ""),
+      tags: tags,
+      schema: String(row[idx.schema] || ""),
+      sheet_ref: String(row[idx.sheet_ref] || "")
+    });
+  }
+
+  return {
+    "@kind": "template.pool.v1",
+    "@v": 1,
+    "@meta": { id: "TEMPLATE_POOL_SHEETS", registry: spreadsheetId + "::" + tabName },
+    templates: templates
+  };
+}
+
+function TEMPLATE_POOL__HEADER_INDEX(header) {
+  function at(name) {
+    var i = header.indexOf(name);
+    if (i === -1) throw new Error("Missing column: " + name);
+    return i;
+  }
+  return {
+    template_id: at("template_id"),
+    kind: at("kind"),
+    title: at("title"),
+    tags: at("tags"),
+    schema: at("schema"),
+    sheet_ref: at("sheet_ref")
+  };
+}
+```
+
+### Sheets blueprint loader (JSON stored in cell or row)
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_LOADER_GAS_v1 — Sheets blueprint loader
+// Supports:
+//  - sheet:JSON:<ssid>:<tab>:<A1>          (cell contains JSON)
+//  - sheet:ROWJSON:<ssid>:<tab>:<row>      (row contains json column)
+//  - drive:fileId:<id>                     (delegates to Drive loader)
+// ============================================================================
+
+function TEMPLATE_POOL_LOAD_TEMPLATE_SHEET(sheet_ref) {
+  var ref = String(sheet_ref || "");
+
+  if (ref.indexOf("drive:") === 0) {
+    return TEMPLATE_POOL_LOAD_TEMPLATE_SHEET_DRIVE(ref);
+  }
+
+  if (ref.indexOf("sheet:JSON:") === 0) {
+    var parts = ref.split(":");
+    // parts: ["sheet","JSON",ssid,tab,a1]
+    var ssid = parts[2], tab = parts[3], a1 = parts[4];
+    var ss = SpreadsheetApp.openById(ssid);
+    var sh = ss.getSheetByName(tab);
+    if (!sh) throw new Error("Missing tab: " + tab);
+    var txt = String(sh.getRange(a1).getValue() || "");
+    if (!txt.trim()) throw new Error("Empty JSON cell: " + ref);
+    return JSON.parse(txt);
+  }
+
+  if (ref.indexOf("sheet:ROWJSON:") === 0) {
+    var p = ref.split(":");
+    // ["sheet","ROWJSON",ssid,tab,row]
+    var ssid2 = p[2], tab2 = p[3], rowNum = Number(p[4]);
+    var ss2 = SpreadsheetApp.openById(ssid2);
+    var sh2 = ss2.getSheetByName(tab2);
+    if (!sh2) throw new Error("Missing tab: " + tab2);
+
+    var range = sh2.getDataRange().getValues();
+    if (range.length < 2) throw new Error("ROWJSON tab empty");
+    var header = range[0].map(String);
+    var jsonCol = header.indexOf("json");
+    if (jsonCol === -1) throw new Error("ROWJSON requires column named 'json'");
+
+    // rowNum is 1-based spreadsheet row number
+    var idx = rowNum - 1;
+    if (idx <= 0 || idx >= range.length) throw new Error("ROWJSON row out of range: " + rowNum);
+
+    var txt2 = String(range[idx][jsonCol] || "");
+    if (!txt2.trim()) throw new Error("Empty json at row: " + rowNum);
+    return JSON.parse(txt2);
+  }
+
+  throw new Error("Unsupported sheet_ref: " + ref);
+}
+```
+
+---
+
+# Putting it together: loader + query + sheet load
+
+```javascript
+function TEMPLATE_POOL_DEMO_QUERY_AND_LOAD() {
+  // 1) load pool registry (choose one)
+  // var pool = TEMPLATE_POOL_LOAD_FROM_DRIVE_POOLJSON("DRIVE_POOL_JSON_FILE_ID");
+  var pool = TEMPLATE_POOL_LOAD_FROM_SHEET_REGISTRY("SPREADSHEET_ID", "templates");
+
+  // 2) query
+  var kql = {
+    "@kind": "template.pool.query.kql.v1",
+    "@v": 1,
+    query: {
+      SELECT: { fields: ["template_id","title","tags","kind","schema","sheet_ref"] },
+      FROM: { source: "TEMPLATE_POOL" },
+      WHERE: { AND: [
+        { tags_has_all: ["glass"] },
+        { tags_has_any: ["landing","cta"] }
+      ]},
+      LIMIT: 5,
+      ORDER_BY: [{ field: "score", dir: "desc" }]
+    }
+  };
+
+  var res = TEMPLATE_POOL_QUERY_KQL(pool, kql);
+  Logger.log(JSON.stringify(res, null, 2));
+
+  // 3) load the best matching template sheet JSON
+  if (res.rows && res.rows.length) {
+    var sheet = TEMPLATE_POOL_LOAD_TEMPLATE_SHEET(res.rows[0].sheet_ref);
+    Logger.log("Loaded sheet kind: " + sheet["@kind"]);
+    Logger.log(JSON.stringify(sheet, null, 2));
+  }
+
+  return res;
+}
+```
+
+---
+
+# Next tight routes (so this becomes “conceptual build” ready)
+
+If you want the next layer, say the word and I’ll emit it:
+
+1. **TEMPLATE_POOL_COMPILE_TO_BRIDGE_v1 (GAS)**
+
+   * takes `template_id + slots` → emits `scxpi.ui.renderer.bridge.v1`
+
+2. **TEMPLATE_POOL_SHEETS_RAWFIELDS_TO_JSON_v1**
+
+   * supports “raw JSON data sheets” not as a single JSON cell, but as structured rows:
+
+     * nodes table, atomic table, slot table → assembled deterministically
+
+3. **TEMPLATE_POOL_INDEXER_v1**
+
+   * builds `index.by_tag` and `index.by_kind` for fast lookup (no scanning)
+
+---
+
+# TEMPLATE_POOL_COMPILE_TO_BRIDGE_v1 (GAS)
+
+**Purpose**  
+Takes:
+
+* `template_id`
+* `slots` (values)
+* a loaded **template sheet JSON**
+
+Emits:
+
+* `scxpi.ui.renderer.bridge.v1`
+
+This is the **only legal path** from “conceptual build” to renderable UI.
+
+## Contract
+
+```js
+compile(templateSheet, slotValues, renderMapOverride?)
+→ scxpi.ui.renderer.bridge.v1
+```
+
+## GAS Implementation
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_COMPILE_TO_BRIDGE_v1 (GAS)
+// Deterministic compilation of a template sheet + slots into render bridge
+// ============================================================================
+
+function TEMPLATE_POOL_COMPILE_TO_BRIDGE(templateSheet, slotValues, renderMapOverride) {
+  if (!templateSheet || !templateSheet["@kind"]) {
+    throw new Error("Invalid template sheet");
+  }
+
+  slotValues = slotValues || {};
+
+  // ------------------------------------------------------------------
+  // 1) Resolve slots (defaults + provided)
+  // ------------------------------------------------------------------
+
+  var slotDefs = templateSheet.slots || {};
+  var resolvedSlots = {};
+
+  for (var k in slotDefs) {
+    var def = slotDefs[k] || {};
+    resolvedSlots[k] = (slotValues[k] != null)
+      ? slotValues[k]
+      : def.default;
+  }
+
+  // ------------------------------------------------------------------
+  // 2) Clone UI fragment and fill slots
+  // ------------------------------------------------------------------
+
+  var uiFrag = templateSheet.ui_fragment;
+  if (!uiFrag || uiFrag["@kind"] !== "xjson.ui.fragment.v1") {
+    throw new Error("Template missing xjson.ui.fragment.v1");
+  }
+
+  var nodes = JSON.parse(JSON.stringify(uiFrag.nodes || {}));
+
+  for (var id in nodes) {
+    var n = nodes[id];
+
+    if (n.text_slot && resolvedSlots[n.text_slot] != null) {
+      n.text = String(resolvedSlots[n.text_slot]);
+      delete n.text_slot;
+    }
+
+    if (n.label_slot && resolvedSlots[n.label_slot] != null) {
+      n.label = String(resolvedSlots[n.label_slot]);
+      delete n.label_slot;
+    }
+  }
+
+  var ui = {
+    "@kind": "xjson.ui.v1",
+    "@v": 1,
+    "@ui": {
+      root: uiFrag.root,
+      nodes: nodes
+    }
+  };
+
+  // ------------------------------------------------------------------
+  // 3) Atomic fragment passthrough (no mutation here)
+  // ------------------------------------------------------------------
+
+  var atomicFragment = templateSheet.atomic_fragment;
+  if (!atomicFragment || atomicFragment["@kind"] !== "atomic.xjson.fragment.v1") {
+    throw new Error("Template missing atomic.xjson.fragment.v1");
+  }
+
+  // ------------------------------------------------------------------
+  // 4) Render map (default or override)
+  // ------------------------------------------------------------------
+
+  var renderMap = renderMapOverride || {
+    "@kind": "scxpi.render.map.v1",
+    "@v": 1,
+    defaults: {
+      canvas: "section",
+      container: "div",
+      row: "div",
+      col: "div",
+      card: "div",
+      text: "p",
+      button: "button",
+      image: "img"
+    },
+    overrides: {},
+    attributes: {
+      button: ["type", "data-action"],
+      text: ["data-text"],
+      image: ["src", "alt"]
+    },
+    slot_policy: {
+      container: "children",
+      row: "children",
+      col: "children",
+      card: "children"
+    }
+  };
+
+  // ------------------------------------------------------------------
+  // 5) Emit bridge bundle
+  // ------------------------------------------------------------------
+
+  return {
+    "@kind": "scxpi.ui.renderer.bridge.v1",
+    "@v": 1,
+    ui: ui,
+    atomic_fragment: atomicFragment,
+    render_map: renderMap,
+    meta: {
+      source: "template_pool",
+      template_id: templateSheet.template_id,
+      slots: resolvedSlots,
+      compiled_at: Date.now()
+    }
+  };
+}
+```
+
+---
+
+# TEMPLATE_POOL_SHEETS_RAWFIELDS_TO_JSON_v1
+
+This is the **critical missing piece** for large-scale authoring.
+
+Instead of one JSON blob, templates are authored as **structured tables**:
+
+* **slots**
+* **ui_nodes**
+* **ui_edges**
+* **atomic_nodes**
+* **atomic_root_vars**
+
+All assembled deterministically.
+
+## Expected Sheet Tabs
+
+For a single template spreadsheet:
+
+```
+slots
+ui_nodes
+ui_edges
+atomic_nodes
+atomic_root
+```
+
+## A) `slots` tab
+
+| slot     | type   | default     |
+| -------- | ------ | ----------- |
+| headline | string | Ship faster |
+| cta      | string | Get Started |
+
+## B) `ui_nodes` tab
+
+| node_id | type      | text | text_slot | label_slot |
+| ------- | --------- | ---- | --------- | ---------- |
+| ui_root | container |      |           |            |
+| ui_h1   | text      |      | headline  |            |
+| ui_btn  | button    |      |           | cta        |
+
+## C) `ui_edges` tab
+
+| parent  | child  |
+| ------- | ------ |
+| ui_root | ui_h1  |
+| ui_root | ui_btn |
+
+## D) `atomic_nodes` tab
+
+| node_id | classes                | vars_json         |
+| ------- | ---------------------- | ----------------- |
+| ui_root | asx-container,asx-grid | {"--asx-gap":0.5} |
+| ui_btn  | asx-btn,asx-primary    | {}                |
+
+## E) `atomic_root` tab
+
+| var             | value |
+| --------------- | ----- |
+| --asx-radius    | 0.65  |
+| --asx-elevation | 0.5   |
+
+## GAS Assembler Implementation
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_SHEETS_RAWFIELDS_TO_JSON_v1 (GAS)
+// Assemble structured Sheets tabs into template sheet JSON
+// ============================================================================
+
+function TEMPLATE_POOL_SHEETS_RAWFIELDS_TO_JSON(spreadsheetId, meta) {
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+
+  // -----------------------------
+  // slots
+  // -----------------------------
+  var slots = {};
+  readTable(ss, "slots", function(row) {
+    slots[row.slot] = {
+      type: row.type,
+      default: row.default
+    };
+  });
+
+  // -----------------------------
+  // ui_nodes
+  // -----------------------------
+  var uiNodes = {};
+  readTable(ss, "ui_nodes", function(row) {
+    uiNodes[row.node_id] = {
+      type: row.type
+    };
+    if (row.text) uiNodes[row.node_id].text = row.text;
+    if (row.text_slot) uiNodes[row.node_id].text_slot = row.text_slot;
+    if (row.label_slot) uiNodes[row.node_id].label_slot = row.label_slot;
+  });
+
+  // -----------------------------
+  // ui_edges
+  // -----------------------------
+  readTable(ss, "ui_edges", function(row) {
+    var p = row.parent;
+    var c = row.child;
+    if (!uiNodes[p]) throw new Error("Missing parent node: " + p);
+    if (!uiNodes[p].children) uiNodes[p].children = [];
+    uiNodes[p].children.push(c);
+  });
+
+  // -----------------------------
+  // atomic nodes
+  // -----------------------------
+  var atomicNodes = {};
+  readTable(ss, "atomic_nodes", function(row) {
+    atomicNodes[row.node_id] = {
+      classes: splitCSV(row.classes),
+      vars: row.vars_json ? JSON.parse(row.vars_json) : {}
+    };
+  });
+
+  // -----------------------------
+  // atomic root vars
+  // -----------------------------
+  var rootVars = {};
+  readTable(ss, "atomic_root", function(row) {
+    rootVars[row.var] = row.value;
+  });
+
+  // -----------------------------
+  // Assemble template JSON
+  // -----------------------------
+  return {
+    "@kind": meta.kind,
+    "@v": 1,
+    template_id: meta.template_id,
+    slots: slots,
+    ui_fragment: {
+      "@kind": "xjson.ui.fragment.v1",
+      root: meta.root,
+      nodes: uiNodes
+    },
+    atomic_fragment: {
+      "@kind": "atomic.xjson.fragment.v1",
+      "@v": 1,
+      "@atomic": {
+        ":root": { vars: rootVars },
+        nodes: atomicNodes
+      }
+    }
+  };
+}
+
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+
+function readTable(ss, tabName, fn) {
+  var sh = ss.getSheetByName(tabName);
+  if (!sh) return;
+
+  var rows = sh.getDataRange().getValues();
+  if (rows.length < 2) return;
+
+  var header = rows[0].map(String);
+  for (var i = 1; i < rows.length; i++) {
+    var row = {};
+    for (var c = 0; c < header.length; c++) {
+      row[header[c]] = rows[i][c];
+    }
+    fn(row);
+  }
+}
+
+function splitCSV(s) {
+  return String(s || "")
+    .split(",")
+    .map(function(x) { return x.trim(); })
+    .filter(Boolean);
+}
+```
+
+---
+
+# End-to-End Flow (Now Complete)
+
+```
+Sheets (raw fields)
+   ↓ RAWFIELDS_TO_JSON
+Template Sheet JSON
+   ↓ COMPILE_TO_BRIDGE (slots)
+scxpi.ui.renderer.bridge.v1
+   ↓ Ghost Renderer / Patch
+DOM / ASXR / SVG UI
+```
+
+This satisfies your constraint:
+
+> **“No way it can just pull designs without mapped schema sheets.”**
+
+The LLM:
+
+* can suggest `template_id`
+* can suggest `slots`
+* **cannot invent structure**
+
+## Next optional emits (if you want to lock it further)
+
+1. **TEMPLATE_POOL_SCHEMA_VALIDATOR_v1**
+2. **TEMPLATE_POOL_VERSION_MIGRATOR_v1**
+3. **TEMPLATE_POOL_PATCH_THEME_v1** (swap glass / neon / dark)
+4. **TEMPLATE_POOL_EXPORT_STATIC_SITE_v1**
+
+---
+
+# TEMPLATE_POOL_SCHEMA_VALIDATOR_v1
+
+**Purpose**  
+Hard-fail any template that does not conform to required structure.  
+This prevents “creative drift” and guarantees Ghost/ASXR stability.
+
+### Validation scope (v1)
+
+* Template sheet JSON
+* UI fragment integrity
+* Atomic fragment integrity
+* Slot definitions
+* Graph sanity (nodes + edges)
+* No orphan references
+
+### GAS Implementation
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_SCHEMA_VALIDATOR_v1 (GAS)
+// Validates template sheet JSON against required invariants
+// ============================================================================
+
+function TEMPLATE_POOL_SCHEMA_VALIDATOR(template) {
+  var errors = [];
+
+  // -------- Core fields --------
+  if (!template || typeof template !== "object") {
+    return fail("Template is not an object");
+  }
+  req(template["@kind"], "@kind missing");
+  req(template["@v"] === 1, "@v must be 1");
+  req(template.template_id, "template_id missing");
+
+  // -------- Slots --------
+  var slots = template.slots || {};
+  for (var k in slots) {
+    var s = slots[k];
+    if (!s || typeof s !== "object") errors.push("Slot invalid: " + k);
+    if (!s.type) errors.push("Slot type missing: " + k);
+  }
+
+  // -------- UI Fragment --------
+  var ui = template.ui_fragment;
+  if (!ui || ui["@kind"] !== "xjson.ui.fragment.v1") {
+    errors.push("ui_fragment missing or wrong kind");
+  } else {
+    validateUIFragment(ui, errors);
+  }
+
+  // -------- Atomic Fragment --------
+  var atomic = template.atomic_fragment;
+  if (!atomic || atomic["@kind"] !== "atomic.xjson.fragment.v1") {
+    errors.push("atomic_fragment missing or wrong kind");
+  } else {
+    validateAtomicFragment(atomic, errors);
+  }
+
+  if (errors.length) {
+    return { ok: false, errors: errors };
+  }
+  return { ok: true };
+
+  // -------- Helpers --------
+
+  function req(cond, msg) { if (!cond) errors.push(msg); }
+
+  function fail(msg) { return { ok: false, errors: [msg] }; }
+}
+
+function validateUIFragment(ui, errors) {
+  var nodes = ui.nodes || {};
+  var root = ui.root;
+  if (!nodes[root]) errors.push("UI root missing: " + root);
+
+  // Check node integrity
+  for (var id in nodes) {
+    var n = nodes[id];
+    if (!n.type) errors.push("UI node missing type: " + id);
+
+    if (n.children) {
+      for (var i = 0; i < n.children.length; i++) {
+        var c = n.children[i];
+        if (!nodes[c]) errors.push("UI child missing: " + c + " (parent " + id + ")");
+      }
+    }
+  }
+}
+
+function validateAtomicFragment(atomic, errors) {
+  var nodes = atomic["@atomic"] && atomic["@atomic"].nodes ? atomic["@atomic"].nodes : {};
+  for (var id in nodes) {
+    var n = nodes[id];
+    if (n.classes && !Array.isArray(n.classes)) {
+      errors.push("Atomic classes must be array: " + id);
+    }
+    if (n.vars && typeof n.vars !== "object") {
+      errors.push("Atomic vars must be object: " + id);
+    }
+  }
+}
+```
+
+---
+
+# TEMPLATE_POOL_VERSION_MIGRATOR_v1
+
+**Purpose**  
+Upgrade older template versions → **current v1** without breaking builds.
+
+This allows **long-lived template pools**.
+
+### Supported migrations (v1)
+
+* v0 → v1
+* field renames
+* slot normalization
+* atomic fragment normalization
+
+### GAS Implementation
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_VERSION_MIGRATOR_v1 (GAS)
+// Migrates older template versions forward deterministically
+// ============================================================================
+
+function TEMPLATE_POOL_VERSION_MIGRATOR(template) {
+  if (!template["@v"] || template["@v"] === 1) {
+    return { migrated: false, template: template };
+  }
+
+  var v = Number(template["@v"]);
+  var t = JSON.parse(JSON.stringify(template)); // clone
+
+  // ---- v0 → v1 ----
+  if (v === 0) {
+    // Rename fields
+    if (t.ui && !t.ui_fragment) {
+      t.ui_fragment = t.ui;
+      delete t.ui;
+    }
+
+    // Normalize slots
+    if (t.slots) {
+      for (var k in t.slots) {
+        if (typeof t.slots[k] !== "object") {
+          t.slots[k] = { type: "string", default: t.slots[k] };
+        }
+      }
+    }
+
+    // Normalize atomic
+    if (t.atomic && !t.atomic_fragment) {
+      t.atomic_fragment = {
+        "@kind": "atomic.xjson.fragment.v1",
+        "@v": 1,
+        "@atomic": t.atomic
+      };
+      delete t.atomic;
+    }
+
+    t["@v"] = 1;
+    return { migrated: true, from: 0, to: 1, template: t };
+  }
+
+  throw new Error("Unsupported migration path: v" + v);
+}
+```
+
+---
+
+# TEMPLATE_POOL_PATCH_THEME_v1
+
+**(Glass / Neon / Dark)**
+
+**Purpose**  
+Apply **theme overlays** without touching structure or slots.
+
+This works by **patching only atomic variables + classes**.
+
+### Theme model
+
+* themes are **atomic patches**
+* composable
+* reversible
+
+## Theme Patch Definitions
+
+```javascript
+var TEMPLATE_POOL_THEME_PRESETS = {
+  glass: {
+    root_vars: {
+      "--asx-surface-opacity": 0.18,
+      "--asx-blur": "18px",
+      "--asx-border-alpha": 0.22
+    },
+    class_map: {
+      add: ["asx-glass"],
+      remove: ["asx-neon", "asx-dark"]
+    }
+  },
+
+  neon: {
+    root_vars: {
+      "--asx-glow": 0.8,
+      "--asx-accent-intensity": 1
+    },
+    class_map: {
+      add: ["asx-neon"],
+      remove: ["asx-glass", "asx-dark"]
+    }
+  },
+
+  dark: {
+    root_vars: {
+      "--asx-bg": "#020617",
+      "--asx-fg": "#e6fffa"
+    },
+    class_map: {
+      add: ["asx-dark"],
+      remove: ["asx-glass", "asx-neon"]
+    }
+  }
+};
+```
+
+## GAS Theme Patch Engine
+
+```javascript
+// ============================================================================
+// TEMPLATE_POOL_PATCH_THEME_v1 (GAS)
+// Applies theme overlays to atomic fragment only
+// ============================================================================
+
+function TEMPLATE_POOL_PATCH_THEME(template, themeName) {
+  var theme = TEMPLATE_POOL_THEME_PRESETS[themeName];
+  if (!theme) throw new Error("Unknown theme: " + themeName);
+
+  var t = JSON.parse(JSON.stringify(template));
+  var atomic = t.atomic_fragment["@atomic"];
+
+  // ---- root vars ----
+  atomic[":root"] = atomic[":root"] || { vars: {} };
+  var rv = atomic[":root"].vars;
+  for (var k in theme.root_vars) {
+    rv[k] = theme.root_vars[k];
+  }
+
+  // ---- node classes ----
+  var nodes = atomic.nodes || {};
+  for (var id in nodes) {
+    var cls = nodes[id].classes || [];
+    cls = cls.filter(function(c) { return theme.class_map.remove.indexOf(c) === -1; });
+    cls = cls.concat(theme.class_map.add);
+    nodes[id].classes = uniq(cls);
+  }
+
+  return t;
+}
+
+function uniq(arr) {
+  var o = {};
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var k = arr[i];
+    if (!o[k]) {
+      o[k] = 1;
+      out.push(k);
+    }
+  }
+  return out;
+}
+```
+
+---
+
+# End-to-End Lockdown Pipeline (Now Complete)
+
+```
+Sheets (raw fields)
+   ↓ RAWFIELDS_TO_JSON
+Template JSON
+   ↓ SCHEMA_VALIDATOR
+   ↓ VERSION_MIGRATOR
+   ↓ PATCH_THEME (optional)
+   ↓ COMPILE_TO_BRIDGE
+Render Bundle
+   ↓ Ghost Renderer / Patch
+```
+
+**Result:**
+
+* Templates are **authoritative**
+* Themes are **safe overlays**
+* Versions evolve **without breakage**
+* LLM is **advisory only**
+
+## Natural next (optional, but powerful)
+
+If you want, next I can emit:
+
+* **TEMPLATE_POOL_DIFF_v1** (compare templates visually/structurally)
+* **TEMPLATE_POOL_GALLERY_UI_v1** (self-rendering template browser)
+* **TEMPLATE_POOL_PERMISSION_RULES_v1** (who can use which templates)
+* **TEMPLATE_POOL_EXPORTER_STATIC_HTML_v1**
+
+---
+
+# JSON-Only ASX Tape Registry (Sheets-as-Truth)
+
+## Core Principle (Locked)
+
+> **Nothing is “stored in the editor.”**  
+> Everything is **rendered from sheets**.  
+> The editor is a *projection*, not a workspace.
+
+This avoids:
+
+* file drift
+* stale builds
+* editor state corruption
+* LLM hallucinated structure
+
+## Mental Model
+
+```
+┌─────────────────────────────┐
+│   Google Sheets (Project)   │   ← SOURCE OF TRUTH
+│─────────────────────────────│
+│ nodes                        │
+│ atomic                       │
+│ slots                        │
+│ assets                       │
+│ routes                       │
+│ metadata                     │
+└──────────────┬──────────────┘
+               │
+        TEMPLATE_POOL_LOADER
+               │
+        SCXPI COMPILERS
+               │
+     scxpi.ui.renderer.bridge.v1
+               │
+      ┌────────┴────────┐
+      │                 │
+ Ghost Shell        ASXR Runtime
+ (preview)          (live app)
+```
+
+## What Micronauts Actually Do (Important)
+
+Micronauts **do not build apps**.  
+They **link sheets → runtime → preview surfaces**.
+
+They are **IO routers**, not generators.
+
+### Micronaut Responsibilities
+
+* Select project sheet
+* Select view (app / page / component / diff / export)
+* Load JSON rows
+* Invoke SCXPI pipeline
+* Render result
+* Never persist UI state
+
+This keeps them **stateless and safe**.
+
+## The `.asx` Tape Registry (JSON-Only)
+
+Each **project** gets **one sheet** that functions like a tape manifest.
+
+### Project Sheet Tabs (Canonical)
+
+```
+PROJECT_<id>.sheet
+├─ registry
+├─ nodes
+├─ atomic
+├─ slots
+├─ assets
+├─ routes
+├─ themes
+├─ history (optional)
+```
+
+This is your **ASX Tape**, just spreadsheet-backed.
+
+No JS files.  
+No HTML files.  
+No CSS files.
+
+Only **structured rows**.
+
+## Example: registry tab
+
+| key              | value              |
+| ---------------- | ------------------ |
+| project_id       | landing_emerald_v1 |
+| runtime          | ghost+asxr         |
+| entry_node       | root               |
+| default_theme    | glass              |
+| version          | 1                  |
+| last_compiled_at | 2026-01-15T04:02Z  |
+
+## Example: nodes tab
+
+| node_id | type      | parent | order | text_slot | children      |
+| ------- | --------- | ------ | ----- | --------- | ------------- |
+| root    | container |        | 0     |           | hero,features |
+| hero    | card      | root   | 0     | title     | cta           |
+| cta     | button    | hero   | 0     | cta_text  |               |
+
+This becomes **xjson.ui.fragment.v1** deterministically.
+
+## Runtime Behavior (Critical)
+
+### 1) User opens project
+
+Micronaut selects project sheet.
+
+### 2) Loader pulls sheets
+
+No editor state. No cache beyond runtime memory.
+
+### 3) SCXPI pipeline runs
+
+```
+RAWFIELDS → JSON
+→ VALIDATE
+→ MIGRATE
+→ PATCH_THEME
+→ COMPILE_TO_BRIDGE
+```
+
+### 4) Runtime renders
+
+* Ghost Shell → preview
+* ASXR → live app
+
+### 5) User “edits”
+
+Edits **only modify sheet rows**.
+
+There is **no save button** in the editor because nothing lives there.
+
+## Why This Is Better Than Files
+
+### Compared to file-based apps
+
+| Files              | Sheet-based ASX |
+| ------------------ | --------------- |
+| Drift              | Deterministic   |
+| Merge conflicts    | Row-level edits |
+| Partial writes     | Atomic updates  |
+| LLM hallucinations | Schema-locked   |
+| Toolchain fragile  | Runtime-pure    |
+
+## Where “App Files” Still Exist
+
+You’re right: **not everything is GAS**.
+
+### What *is* a file
+
+* Micronaut UI JS
+* Ghost Shell renderer
+* ASXR runtime
+* Preview widgets
+* Exporters
+* CLI tools
+
+### What is *never* a file
+
+* App UI
+* Layout
+* Theme
+* Structure
+* Content
+* Navigation
+
+Those live **only in sheets**.
+
+## This Is a JSON-Only Tape System
+
+You’ve effectively created:
+
+> **A fileless app platform**  
+> where apps are *rendered*, not *built*.
+
+The “bot”:
+
+* does not emit files
+* does not store artifacts
+* does not own state
+
+It only **maps intent → sheet mutations**.
+
+## What This Enables Next (Naturally)
+
+If you want, the next logical extensions are:
+
+1. **Per-project diff timelines** (sheet history → visual diff)
+2. **Fork project sheet → instant app fork**
+3. **Marketplace = read-only shared sheets**
+4. **Runtime hot-swap between Ghost / ASXR / SVG**
+5. **Offline export = snapshot of compiled bridge**
+
+No new concepts required — just more projections.
+
+If you want, next I can:
+
+* formalize the **PROJECT_SHEET_SCHEMA_v1**
+* emit a **Micronaut Project Switcher**
+* define **sheet-level permissions**
+* or map this directly to **ASX-R conformance**
+
+Just point to the next fold.
+
+---
+
+# PROJECT_SHEET_DIFF_TIMELINE_v1
+
+## What it is
+
+A **deterministic timeline** of a project sheet’s evolution that can drive:
+
+* **structural diffs** (nodes/edges/slots/atomic/routes)
+* **render diffs** (bridge bundles + optional DOM patch bundles)
+* **proof seals** (hash chain over snapshots)
+
+It works even if you never store “files” — the **sheet rows are the tape**.
+
+## 1) Timeline data model
+
+### A) Snapshot
+
+A snapshot is the **canonical JSON assembly** of a sheet at a point in time.
+
+```json
+{
+  "@kind": "asx.project.sheet.snapshot.v1",
+  "@v": 1,
+  "sheet_id": "…",
+  "project_id": "…",
+  "rev": 12,
+  "at": "2026-01-15T05:33:01Z",
+  "actor": "email:someone@x.com",
+  "reason": "edit nodes",
+  "raw": { "tabs": { "registry": [], "nodes": [], "atomic_nodes": [], "atomic_root": [], "slots": [], "routes": [], "themes": [], "assets": [], "permissions": [] } },
+  "assembled": { "@kind": "tpl.project.v1", "@v": 1, "template_id": "…", "slots": {}, "ui_fragment": {}, "atomic_fragment": {} },
+  "conformance": { "@kind": "asx.project.sheet.conformance.v1", "@v": 1, "overall": "pass", "vectors": [] },
+  "hash": "sha256:…"
+}
+```
+
+### B) Diff event
+
+Each diff event compares two snapshots:
+
+```json
+{
+  "@kind": "asx.project.sheet.diff.event.v1",
+  "@v": 1,
+  "from_rev": 11,
+  "to_rev": 12,
+  "at": "2026-01-15T05:33:01Z",
+  "diff": {
+    "@kind": "template.pool.diff.v1",
+    "@v": 1,
+    "structural": { "...": "…" },
+    "atomic": { "...": "…" },
+    "summary": { "structural_changes": 2, "atomic_changes": 1 }
+  },
+  "bridge_patch": {
+    "@kind": "scxpi.ui.patch.bundle.v1",
+    "@v": 1
+  },
+  "seal": {
+    "@kind": "asx.proof.seal.v1",
+    "@v": 1,
+    "prev": "sha256:…",
+    "curr": "sha256:…",
+    "chain": "sha256(prev||curr||diff)"
+  }
+}
+```
+
+### C) Timeline
+
+```json
+{
+  "@kind": "asx.project.sheet.diff.timeline.v1",
+  "@v": 1,
+  "sheet_id": "…",
+  "project_id": "…",
+  "head_rev": 12,
+  "events": [ /* diff.event.v1 */ ]
+}
+```
+
+## 2) Where revisions come from (two valid modes)
+
+### Mode 1 (recommended): **history tab** (append-only)
+
+Add a `history` tab where every update appends a row with:
+
+* `rev` (monotonic)
+* `at`
+* `actor`
+* `reason`
+* `tabs_changed` (csv)
+* `snapshot_json` (optional) OR a lightweight delta pointer
+
+This is deterministic and works in GAS.
+
+### Mode 2: Sheets Version History (harder in GAS)
+
+Google Sheets “version history” isn’t easily enumerable from plain Apps Script without Drive API + permissions and still won’t give you table-level diffs cleanly. For ASX law, **Mode 1 wins**.
+
+## 3) GAS emit: PROJECT_SHEET_DIFF_TIMELINE_v1
+
+This assumes:
+
+* you already have `PROJECT_SHEET_CONFORMANCE_VECTORS(sheetId)`
+* you already have “rawfields → template json” assembler (the one we emitted / used in the switcher)
+* you maintain a `history` tab with `rev, at, actor, reason, snapshot_json` (snapshot_json can be optional; if absent, we reconstruct from current tabs only for head, and diffs are “best effort”)
+
+### GAS code
+
+```javascript
+// ============================================================================
+// PROJECT_SHEET_DIFF_TIMELINE_v1 (GAS)
+// Builds a diff timeline from an append-only "history" tab.
+// ============================================================================
+
+function PROJECT_SHEET_DIFF_TIMELINE(sheetId, opts) {
+  opts = opts || {};
+  var maxEvents = opts.max_events || 50;
+
+  var ss = SpreadsheetApp.openById(sheetId);
+
+  // Load history rows (required for real timeline)
+  var hist = readTab_(ss, "history");
+  if (!hist) {
+    return {
+      "@kind": "asx.project.sheet.diff.timeline.v1",
+      "@v": 1,
+      "sheet_id": sheetId,
+      "project_id": "",
+      "head_rev": 0,
+      "events": [],
+      "note": "history tab missing; timeline unavailable"
+    };
+  }
+
+  // Sort by rev asc (string-safe)
+  hist.sort(function(a, b) { return Number(a.rev || 0) - Number(b.rev || 0); });
+
+  // Build snapshots list (limited)
+  var snaps = [];
+  for (var i = Math.max(0, hist.length - (maxEvents + 1)); i < hist.length; i++) {
+    var row = hist[i];
+    var snap = buildSnapshotFromHistoryRow_(ss, sheetId, row);
+    snaps.push(snap);
+  }
+
+  // Build diff events
+  var events = [];
+  for (var j = 1; j < snaps.length; j++) {
+    var prev = snaps[j - 1];
+    var curr = snaps[j];
+
+    var diff = TEMPLATE_SHEET_DIFF_V1_(prev.assembled, curr.assembled);
+
+    var chainSeal = {
+      "@kind": "asx.proof.seal.v1",
+      "@v": 1,
+      "prev": prev.hash,
+      "curr": curr.hash,
+      "chain": "sha256:" + sha256Hex_(prev.hash + "||" + curr.hash + "||" + JSON.stringify(diff))
+    };
+
+    // optional: patch bundle placeholder
+    var patch = {
+      "@kind": "scxpi.ui.patch.bundle.v1",
+      "@v": 1,
+      "from_rev": prev.rev,
+      "to_rev": curr.rev,
+      "ops": [] // you can fill later with node-level ops
+    };
+
+    events.push({
+      "@kind": "asx.project.sheet.diff.event.v1",
+      "@v": 1,
+      "from_rev": prev.rev,
+      "to_rev": curr.rev,
+      "at": curr.at,
+      "diff": diff,
+      "bridge_patch": patch,
+      "seal": chainSeal
+    });
+  }
+
+  var projectId = snaps.length ? snaps[snaps.length - 1].project_id : "";
+
+  return {
+    "@kind": "asx.project.sheet.diff.timeline.v1",
+    "@v": 1,
+    "sheet_id": sheetId,
+    "project_id": projectId,
+    "head_rev": snaps.length ? snaps[snaps.length - 1].rev : 0,
+    "events": events
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Snapshot builder
+// ----------------------------------------------------------------------------
+
+function buildSnapshotFromHistoryRow_(ss, sheetId, row) {
+  var rev = Number(row.rev || 0);
+  var at = row.at ? String(row.at) : new Date().toISOString();
+  var actor = row.actor ? String(row.actor) : "";
+  var reason = row.reason ? String(row.reason) : "";
+
+  var rawTabs;
+  if (row.snapshot_json && String(row.snapshot_json).trim()) {
+    // Stored snapshot JSON (preferred)
+    rawTabs = JSON.parse(String(row.snapshot_json));
+  } else {
+    // Fallback: reconstruct current tabs (head-only accuracy)
+    rawTabs = {
+      tabs: {
+        registry: readTab_(ss, "registry") || [],
+        slots: readTab_(ss, "slots") || [],
+        nodes: readTab_(ss, "nodes") || [],
+        routes: readTab_(ss, "routes") || [],
+        atomic_nodes: readTab_(ss, "atomic_nodes") || [],
+        atomic_root: readTab_(ss, "atomic_root") || [],
+        themes: readTab_(ss, "themes") || [],
+        assets: readTab_(ss, "assets") || [],
+        permissions: readTab_(ss, "permissions") || []
+      }
+    };
+  }
+
+  var reg = toRegistry_(rawTabs.tabs.registry || []);
+  var projectId = reg.project_id || "";
+
+  // Assemble to template sheet JSON (same deterministic rules as switcher)
+  var entry = reg.entry_node || "root";
+  var assembled = RAWFIELDS_TABS_TO_TEMPLATE_SHEET_V1_(rawTabs.tabs, {
+    template_id: projectId || ("project_" + sheetId),
+    kind: "tpl.project.v1",
+    root: entry
+  });
+
+  var conformance = PROJECT_SHEET_CONFORMANCE_VECTORS(sheetId);
+
+  // Hash snapshot (stable-ish): use assembled+rev+entry
+  var hashPayload = JSON.stringify({ rev: rev, at: at, assembled: assembled });
+  var hash = "sha256:" + sha256Hex_(hashPayload);
+
+  return {
+    "@kind": "asx.project.sheet.snapshot.v1",
+    "@v": 1,
+    "sheet_id": sheetId,
+    "project_id": projectId,
+    "rev": rev,
+    "at": at,
+    "actor": actor,
+    "reason": reason,
+    "raw": rawTabs,
+    "assembled": assembled,
+    "conformance": conformance,
+    "hash": hash
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Minimal diff engine (template.pool.diff.v1 compatible)
+// ----------------------------------------------------------------------------
+
+function TEMPLATE_SHEET_DIFF_V1_(tA, tB) {
+  // Very small subset; can be swapped with your richer diff module later.
+  var uiA = tA.ui_fragment, uiB = tB.ui_fragment;
+  var aNodes = (uiA && uiA.nodes) ? uiA.nodes : {};
+  var bNodes = (uiB && uiB.nodes) ? uiB.nodes : {};
+
+  var added = [], removed = [], changed = [];
+
+  for (var id in bNodes) if (!aNodes[id]) added.push(id);
+  for (var id2 in aNodes) if (!bNodes[id2]) removed.push(id2);
+
+  for (var id3 in aNodes) {
+    if (!bNodes[id3]) continue;
+    var na = aNodes[id3], nb = bNodes[id3];
+    var deltas = [];
+    if (String(na.type) !== String(nb.type)) deltas.push({ field: "type", a: na.type, b: nb.type });
+
+    var ca = (na.children || []).join(",");
+    var cb = (nb.children || []).join(",");
+    if (ca !== cb) deltas.push({ field: "children", a: na.children || [], b: nb.children || [] });
+
+    if (deltas.length) changed.push({ node_id: id3, deltas: deltas });
+  }
+
+  return {
+    "@kind": "template.pool.diff.v1",
+    "@v": 1,
+    "template_a": tA.template_id,
+    "template_b": tB.template_id,
+    "structural": { nodes: { added: added, removed: removed, changed: changed } },
+    "atomic": { nodes: { added: [], removed: [], changed: [] }, root_vars: { added: [], removed: [], changed: [] } },
+    "summary": { structural_changes: added.length + removed.length + changed.length, atomic_changes: 0 }
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Deterministic assembler: tabs -> template sheet json (browser/GAS shared idea)
+// ----------------------------------------------------------------------------
+
+function RAWFIELDS_TABS_TO_TEMPLATE_SHEET_V1_(tabs, meta) {
+  // slots
+  var slots = {};
+  (tabs.slots || []).forEach(function(r) {
+    var s = String(r.slot || "").trim();
+    if (!s) return;
+    slots[s] = { type: String(r.type || "string"), "default": r["default"] };
+  });
+
+  // nodes
+  var uiNodes = {};
+  (tabs.nodes || []).forEach(function(r) {
+    var id = String(r.node_id || "").trim();
+    if (!id) return;
+    uiNodes[id] = { type: String(r.type || "container") };
+    if (r.text) uiNodes[id].text = String(r.text);
+    if (r.text_slot) uiNodes[id].text_slot = String(r.text_slot);
+    if (r.label) uiNodes[id].label = String(r.label);
+    if (r.label_slot) uiNodes[id].label_slot = String(r.label_slot);
+    if (r.action) uiNodes[id].action = String(r.action);
+    uiNodes[id].parent = r.parent ? String(r.parent) : "";
+    uiNodes[id].order = (r.order != null && r.order !== "") ? Number(r.order) : 0;
+  });
+
+  // parent/order -> children (derived deterministically)
+  var byParent = {};
+  for (var id in uiNodes) {
+    var p = uiNodes[id].parent;
+    if (!p) continue;
+    if (!byParent[p]) byParent[p] = [];
+    byParent[p].push({ id: id, order: uiNodes[id].order });
+  }
+  for (var pid in byParent) {
+    byParent[pid].sort(function(a, b) { return a.order - b.order; });
+    uiNodes[pid] = uiNodes[pid] || { type: "container" };
+    uiNodes[pid].children = byParent[pid].map(function(x) { return x.id; });
+  }
+
+  // atomic nodes
+  var atomicNodes = {};
+  (tabs.atomic_nodes || []).forEach(function(r) {
+    var idn = String(r.node_id || "").trim();
+    if (!idn) return;
+    var classes = String(r.classes || "").split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+    var vars = {};
+    if (r.vars_json && String(r.vars_json).trim()) {
+      try { vars = JSON.parse(String(r.vars_json)); } catch (e) { vars = {}; }
+    }
+    atomicNodes[idn] = { classes: classes, vars: vars };
+  });
+
+  // atomic root vars
+  var rootVars = {};
+  (tabs.atomic_root || []).forEach(function(r) {
+    var k = String(r.var || "").trim();
+    if (!k) return;
+    rootVars[k] = r.value;
+  });
+
+  return {
+    "@kind": meta.kind,
+    "@v": 1,
+    "template_id": meta.template_id,
+    "slots": slots,
+    "ui_fragment": { "@kind": "xjson.ui.fragment.v1", "root": meta.root, "nodes": stripInternal_(uiNodes) },
+    "atomic_fragment": { "@kind": "atomic.xjson.fragment.v1", "@v": 1, "@atomic": { ":root": { vars: rootVars }, "nodes": atomicNodes } }
+  };
+}
+
+function stripInternal_(uiNodes) {
+  // remove parent/order from fragment (runtime derives children)
+  var out = {};
+  for (var id in uiNodes) {
+    var n = {};
+    for (var k in uiNodes[id]) {
+      if (k === "parent" || k === "order") continue;
+      n[k] = uiNodes[id][k];
+    }
+    out[id] = n;
+  }
+  return out;
+}
+
+function toRegistry_(rows) {
+  var o = {};
+  (rows || []).forEach(function(r) {
+    var k = String(r.key || "").trim();
+    if (!k) return;
+    o[k] = String(r.value || "");
+  });
+  return o;
+}
+
+function readTab_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) return null;
+  var v = sh.getDataRange().getValues();
+  if (v.length < 2) return [];
+  var h = v[0].map(String);
+  var out = [];
+  for (var r = 1; r < v.length; r++) {
+    var o = {};
+    for (var c = 0; c < h.length; c++) o[h[c]] = v[r][c];
+    // skip empty
+    var any = false;
+    for (var k in o) if (String(o[k] || "").trim()) { any = true; break; }
+    if (any) out.push(o);
+  }
+  return out;
+}
+
+// SHA-256 helper using Apps Script Utilities
+function sha256Hex_(s) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8);
+  return bytes.map(function(b) { var v = (b < 0 ? b + 256 : b); return (v < 16 ? "0" : "") + v.toString(16); }).join("");
+}
+```
+
+### What to add to your project sheet
+
+Add a `history` tab with columns:
+
+* `rev` (number)
+* `at` (ISO string)
+* `actor` (principal string)
+* `reason` (string)
+* `snapshot_json` (optional JSON; recommended for true diffs)
+
+If you *don’t* store `snapshot_json`, the timeline still emits, but historical diffs will be “best effort” (because it can’t reconstruct old states).
+
+---
+
+# LANGPACK_REGISTRY_SCHEMA_v1 (sheet-backed)
+
+## What it is
+
+A **single registry spreadsheet** that indexes many **language packs**.  
+Each language pack can live in:
+
+* its own spreadsheet (recommended), or
+* a bundle of tabs inside the registry spreadsheet (small scale)
+
+The registry is the “tape index”. The packs are the “tapes”.
+
+## A) Registry Spreadsheet: required tabs
+
+**Required**
+
+* `langpacks`
+* `artifacts`
+* `versions`
+* `capabilities`
+
+**Optional**
+
+* `aliases`
+* `licenses`
+* `tests`
+* `permissions`
+
+### 1) `langpacks` tab (the catalog)
+
+Columns (required):
+
+* `lang_id` (string, unique) — canonical id: `js`, `ts`, `py`, `go`, `rust`, `java`, `cpp`, `c`, `php`, `sql`, `html`, `css`, `json`, `yaml`, `toml`, `bash`, …
+* `title` (string) — display name
+* `family` (string) — e.g. `c-like`, `ml`, `shell`, `markup`, `query`
+* `status` (enum) — `active|deprecated|draft`
+* `pack_sheet_id` (string) — Google Sheet ID containing the pack tables
+* `default_version` (string) — e.g. `1.0.0`
+* `entry_artifact_id` (string) — e.g. `oracle.core.v1`
+* `tags` (csv)
+* `updated_at` (ISO)
+
+Columns (optional):
+
+* `notes`
+* `homepage`
+
+Example:
+
+| lang_id | title      | family | status | pack_sheet_id | default_version | entry_artifact_id | tags     | updated_at        |
+| ------- | ---------- | ------ | ------ | ------------- | --------------- | ----------------- | -------- | ----------------- |
+| js      | JavaScript | c-like | active | 1Abc…         | 1.0.0           | oracle.core.v1    | web,node | 2026-01-15T05:44Z |
+
+### 2) `artifacts` tab (what exists per language)
+
+Each row declares an artifact and where it lives.
+
+Columns (required):
+
+* `lang_id` (FK → langpacks.lang_id)
+* `artifact_id` (string) — e.g. `grammar.ebnf.v1`, `ast.schema.v1`, `oracle.core.v1`, `prettyprint.rules.v1`, `tokens.profile.v1`
+* `kind` (enum) — `grammar|ast_schema|oracle|printer|tests|token_profile|lint_rules`
+* `version` (string) — `1.0.0`
+* `location_kind` (enum) — `sheet_tab|json_url|inline_json`
+* `location_ref` (string) — if `sheet_tab`, tab name in pack sheet; if `json_url`, URL; if inline_json, a key
+* `hash` (string) — optional proof hash
+* `required` (bool) — if true, pack is invalid without it
+
+Example:
+
+| lang_id | artifact_id     | kind    | version | location_kind | location_ref | required |
+| ------- | --------------- | ------- | ------- | ------------- | ------------ | -------- |
+| js      | oracle.core.v1  | oracle  | 1.0.0   | sheet_tab     | oracle       | true     |
+| js      | grammar.ebnf.v1 | grammar | 1.0.0   | sheet_tab     | grammar      | true     |
+
+### 3) `versions` tab (version policy + migration)
+
+Columns:
+
+* `lang_id`
+* `from_version`
+* `to_version`
+* `migrator_artifact_id` (e.g. `migrate.v1`)
+* `notes`
+
+### 4) `capabilities` tab (runtime expectations)
+
+Columns:
+
+* `lang_id`
+* `cap` (enum-ish string) — `parse`, `ast`, `format`, `lint`, `typecheck`, `eval_safe`, `eval_unsafe`
+* `level` (number 0–3) — 0 none, 1 partial, 2 good, 3 strict
+* `notes`
+
+Example:
+
+| lang_id | cap       | level |
+| ------- | --------- | ----- |
+| js      | parse     | 3     |
+| js      | typecheck | 1     |
+
+### 5) Optional `aliases` tab
+
+Columns:
+
+* `alias` (string) — `javascript`, `node`, `ecmascript`
+* `lang_id` (FK)
+
+## B) Per-Language Pack Spreadsheet (recommended)
+
+Each pack sheet is **typed tables**. Required tabs for v1:
+
+* `meta`
+* `grammar` (or `grammar_rules`)
+* `ast_schema`
+* `oracle`
+* `tests`
+
+Optional:
+
+* `printer`
+* `lint_rules`
+* `token_profile`
+
+### `meta` tab
+
+Columns: `key`, `value`  
+Required keys:
+
+* `lang_id`
+* `version`
+* `oracle_entry` (usually `oracle.core.v1`)
+* `grammar_kind` (`ebnf|peg|parser_tables`)
+* `ast_kind` (`json_schema|custom`)
+* `updated_at`
+
+## Registry JSON view (canonical “assembled” form)
+
+Your GAS loader will emit this:
+
+```json
+{
+  "@kind": "asx.langpack.registry.v1",
+  "@v": 1,
+  "langpacks": {
+    "js": {
+      "title": "JavaScript",
+      "pack_sheet_id": "1Abc…",
+      "default_version": "1.0.0",
+      "entry_artifact_id": "oracle.core.v1",
+      "artifacts": {
+        "oracle.core.v1": { "kind": "oracle", "version": "1.0.0", "location": { "kind": "sheet_tab", "ref": "oracle" } },
+        "grammar.ebnf.v1": { "kind": "grammar", "version": "1.0.0", "location": { "kind": "sheet_tab", "ref": "grammar" } }
+      },
+      "capabilities": { "parse": 3, "ast": 2, "format": 1 }
+    }
+  },
+  "aliases": { "javascript": "js", "ecmascript": "js" }
+}
+```
+
+---
+
+# CODE_ORACLE_ABI_v1 (JS / Python / GAS)
+
+### Goal
+
+A uniform interface:
+
+**parse → ast → score → errors**
+
+The oracle is not “the model”. It is the **legality governor**.
+
+## 1) ABI Envelope
+
+### Request
+
+```json
+{
+  "@kind": "code.oracle.request.v1",
+  "@v": 1,
+  "lang_id": "js",
+  "mode": "parse|lint|format|score",
+  "input": {
+    "source": "let x = 1;",
+    "filename": "main.js",
+    "context": {
+      "dialect": "ecmascript",
+      "strict": true
+    }
+  },
+  "options": {
+    "max_errors": 50,
+    "timeout_ms": 1500,
+    "return_ast": true,
+    "return_tokens": false,
+    "return_formatted": false
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "@kind": "code.oracle.response.v1",
+  "@v": 1,
+  "lang_id": "js",
+  "mode": "parse",
+  "ok": true,
+  "score": {
+    "legality": 1.0,
+    "style": 0.75,
+    "completeness": 0.9,
+    "risk": 0.0
+  },
+  "ast": { "@kind": "ast.tree.v1", "root": "Program", "nodes": [] },
+  "errors": [],
+  "warnings": [],
+  "formatted": null,
+  "metrics": {
+    "parse_ms": 7,
+    "ast_nodes": 42,
+    "tokens": 0
+  }
+}
+```
+
+## 2) Error object (stable across runtimes)
+
+```json
+{
+  "code": "E_PARSE|E_LEX|E_AST|E_STYLE|E_TYPE",
+  "message": "Unexpected token",
+  "severity": "error|warning",
+  "span": { "line": 1, "col": 5, "end_line": 1, "end_col": 6 },
+  "hint": "Did you forget a semicolon?",
+  "rule_id": "js/grammar/…"
+}
+```
+
+## 3) Deterministic scoring rules (v1)
+
+Scores are 0..1.
+
+* `legality`:
+  * 1.0 if parse succeeds with zero errors
+  * else `max(0, 1 - errors*0.1 - fatal*0.3)`
+* `style`:
+  * based on lint warnings count
+* `completeness`:
+  * optional heuristic (e.g. unmatched braces, missing returns)
+* `risk`:
+  * optional (e.g. eval usage, shell exec)
+
+These are **rules**, not model opinions.
+
+## 4) JS reference shape (browser/Node)
+
+```js
+// CODE_ORACLE_ABI_v1 (JS interface)
+export class CodeOracle {
+  constructor(langpack) { this.langpack = langpack; }
+
+  /**
+   * @param {object} req code.oracle.request.v1
+   * @returns {object} code.oracle.response.v1
+   */
+  run(req) {
+    // 1) parse
+    // 2) build AST
+    // 3) lint/style
+    // 4) score
+    // This wrapper stays stable; per-language implementation plugs in.
+    throw new Error("Not implemented");
+  }
+}
+```
+
+### JS adapter contract (per language)
+
+```js
+export const JsOracleAdapter = {
+  lang_id: "js",
+  parse(source, opts) { /* returns { ok, ast, errors, warnings, metrics } */ },
+  format(sourceOrAst, opts) { /* returns { formatted, warnings } */ },
+  lint(ast, opts) { /* returns warnings */ },
+  score(result, opts) { /* returns score object */ }
+};
+```
+
+## 5) Python reference shape
+
+```python
+# CODE_ORACLE_ABI_v1 (Python)
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+@dataclass
+class OracleResponse:
+  kind: str
+  v: int
+  lang_id: str
+  mode: str
+  ok: bool
+  score: Dict[str, float]
+  ast: Optional[Dict[str, Any]]
+  errors: List[Dict[str, Any]]
+  warnings: List[Dict[str, Any]]
+  formatted: Optional[str]
+  metrics: Dict[str, Any]
+
+class CodeOracle:
+  def __init__(self, adapter):
+    self.adapter = adapter
+
+  def run(self, req: Dict[str, Any]) -> OracleResponse:
+    src = req["input"]["source"]
+    mode = req["mode"]
+    opts = req.get("options", {})
+    parsed = self.adapter.parse(src, opts)
+
+    out = {
+      "@kind": "code.oracle.response.v1",
+      "@v": 1,
+      "lang_id": req["lang_id"],
+      "mode": mode,
+      "ok": bool(parsed.get("ok")),
+      "score": self.adapter.score(parsed, opts),
+      "ast": parsed.get("ast") if opts.get("return_ast") else None,
+      "errors": parsed.get("errors", []),
+      "warnings": parsed.get("warnings", []),
+      "formatted": None,
+      "metrics": parsed.get("metrics", {})
+    }
+
+    if mode == "format":
+      out["formatted"] = self.adapter.format(parsed.get("ast") or src, opts).get("formatted")
+
+    return OracleResponse(
+      kind=out["@kind"], v=out["@v"], lang_id=out["lang_id"], mode=out["mode"],
+      ok=out["ok"], score=out["score"], ast=out["ast"], errors=out["errors"],
+      warnings=out["warnings"], formatted=out["formatted"], metrics=out["metrics"]
+    )
+```
+
+## 6) GAS reference shape (what GAS can do)
+
+GAS cannot run heavy parsers, but it **can**:
+
+* enforce schema presence
+* run lightweight checks
+* call external oracle runtimes (optional) while keeping ABI stable
+
+### GAS oracle “broker” (ABI-stable)
+
+```javascript
+// CODE_ORACLE_ABI_v1 (GAS broker)
+// route=oracle.run.v1&lang_id=js&mode=parse
+function api_oracle_run_v1_(e) {
+  var req = JSON.parse(e.postData.contents);
+
+  // lightweight: check required fields
+  if (!req.lang_id || !req.mode || !req.input || !req.input.source) {
+    return ok_({
+      "@kind": "code.oracle.response.v1", "@v": 1,
+      lang_id: req.lang_id || "",
+      mode: req.mode || "",
+      ok: false,
+      score: { legality: 0, style: 0, completeness: 0, risk: 0 },
+      ast: null,
+      errors: [{ code: "E_SCHEMA", message: "missing required fields", severity: "error", span: null }],
+      warnings: [],
+      formatted: null,
+      metrics: {}
+    });
+  }
+
+  // If you have an external oracle service, forward here (optional).
+  // Otherwise, provide a minimal heuristic “oracle-lite”.
+  var res = oracleLite_(req);
+
+  return ok_(res);
+}
+
+function oracleLite_(req) {
+  var src = String(req.input.source);
+
+  // super minimal heuristics
+  var errors = [];
+  var open = (src.match(/\{/g) || []).length;
+  var close = (src.match(/\}/g) || []).length;
+  if (open !== close) errors.push({ code: "E_PARSE", message: "brace mismatch", severity: "error", span: null });
+
+  var ok = errors.length === 0;
+
+  return {
+    "@kind": "code.oracle.response.v1",
+    "@v": 1,
+    "lang_id": req.lang_id,
+    "mode": req.mode,
+    "ok": ok,
+    "score": {
+      "legality": ok ? 1.0 : Math.max(0, 1.0 - errors.length * 0.2),
+      "style": 1.0,
+      "completeness": ok ? 0.9 : 0.2,
+      "risk": 0.0
+    },
+    "ast": null,
+    "errors": errors,
+    "warnings": [],
+    "formatted": null,
+    "metrics": { "oracle": "lite", "len": src.length }
+  };
+}
+```
+
+## Next routes (natural)
+
+If you want to wire this end-to-end, the next two “must haves” are:
+
+1. **LANGPACK_LOADER_GAS_v1**  
+   Load registry → load pack sheet → assemble pack JSON (grammar/ast/oracle refs)
+
+2. **TREE_SITTER_ORACLE_ADAPTER_v1** (Node/Python)  
+   A real implementation of `parse → ast → errors` for many languages using tree-sitter, while keeping the ABI identical.
+
+---
+
+# LANGPACK_LOADER_GAS_v1 (Google Apps Script)
+
+## What it does
+
+* Reads the **Registry Spreadsheet** tabs: `langpacks`, `artifacts`, `capabilities`, `aliases`, `versions`
+* Emits **asx.langpack.registry.v1**
+* Can also load a **single pack** (by `lang_id`) and return its artifact payloads (where artifacts are located in the pack sheet)
+
+## Expected registry sheet tabs
+
+* `langpacks` (required)
+* `artifacts` (required)
+* `capabilities` (required)
+* `aliases` (optional)
+* `versions` (optional)
+
+## GAS code: `langpack_loader.gs`
+
+```javascript
+// ============================================================================
+// LANGPACK_LOADER_GAS_v1
+// Sheet-backed langpack registry loader + per-pack artifact resolver
+// ============================================================================
+
+function LANGPACK_LOADER_GAS_v1_loadRegistry(registrySheetId, opts) {
+  opts = opts || {};
+  var ss = SpreadsheetApp.openById(registrySheetId);
+
+  var langpacksTab = readTab_(ss, "langpacks");
+  var artifactsTab = readTab_(ss, "artifacts");
+  var capabilitiesTab = readTab_(ss, "capabilities");
+  var aliasesTab = readTab_(ss, "aliases");      // optional
+  var versionsTab = readTab_(ss, "versions");    // optional
+
+  if (!langpacksTab) throw new Error("Registry missing langpacks tab");
+  if (!artifactsTab) throw new Error("Registry missing artifacts tab");
+  if (!capabilitiesTab) throw new Error("Registry missing capabilities tab");
+
+  // ---- build langpacks base ----
+  var packs = {}; // lang_id -> pack record
+  for (var i = 0; i < langpacksTab.length; i++) {
+    var r = langpacksTab[i];
+    var langId = String(r.lang_id || "").trim();
+    if (!langId) continue;
+
+    packs[langId] = {
+      title: String(r.title || ""),
+      family: String(r.family || ""),
+      status: String(r.status || "active"),
+      pack_sheet_id: String(r.pack_sheet_id || ""),
+      default_version: String(r.default_version || ""),
+      entry_artifact_id: String(r.entry_artifact_id || ""),
+      tags: splitCsv_(r.tags),
+      updated_at: String(r.updated_at || ""),
+      notes: String(r.notes || ""),
+      homepage: String(r.homepage || ""),
+      artifacts: {},     // filled later
+      capabilities: {}   // filled later
+    };
+  }
+
+  // ---- attach artifacts ----
+  for (var j = 0; j < artifactsTab.length; j++) {
+    var a = artifactsTab[j];
+    var lid = String(a.lang_id || "").trim();
+    if (!lid || !packs[lid]) continue;
+
+    var artifactId = String(a.artifact_id || "").trim();
+    if (!artifactId) continue;
+
+    packs[lid].artifacts[artifactId] = {
+      kind: String(a.kind || ""),
+      version: String(a.version || ""),
+      location: {
+        kind: String(a.location_kind || ""),
+        ref: String(a.location_ref || "")
+      },
+      hash: String(a.hash || ""),
+      required: toBool_(a.required)
+    };
+  }
+
+  // ---- attach capabilities (max level if multiple rows) ----
+  for (var k = 0; k < capabilitiesTab.length; k++) {
+    var c = capabilitiesTab[k];
+    var lid2 = String(c.lang_id || "").trim();
+    if (!lid2 || !packs[lid2]) continue;
+
+    var cap = String(c.cap || "").trim();
+    if (!cap) continue;
+
+    var level = Number(c.level || 0);
+    var cur = Number(packs[lid2].capabilities[cap] || 0);
+    if (level > cur) packs[lid2].capabilities[cap] = level;
+  }
+
+  // ---- aliases ----
+  var aliases = {};
+  if (aliasesTab) {
+    for (var z = 0; z < aliasesTab.length; z++) {
+      var al = aliasesTab[z];
+      var alias = String(al.alias || "").trim().toLowerCase();
+      var lid3 = String(al.lang_id || "").trim();
+      if (alias && lid3 && packs[lid3]) aliases[alias] = lid3;
+    }
+  }
+
+  // ---- versions ----
+  var versions = [];
+  if (versionsTab) {
+    for (var v = 0; v < versionsTab.length; v++) {
+      var row = versionsTab[v];
+      var lid4 = String(row.lang_id || "").trim();
+      if (!lid4 || !packs[lid4]) continue;
+      versions.push({
+        lang_id: lid4,
+        from_version: String(row.from_version || ""),
+        to_version: String(row.to_version || ""),
+        migrator_artifact_id: String(row.migrator_artifact_id || ""),
+        notes: String(row.notes || "")
+      });
+    }
+  }
+
+  // ---- output ----
+  return {
+    "@kind": "asx.langpack.registry.v1",
+    "@v": 1,
+    registry_sheet_id: registrySheetId,
+    generated_at: new Date().toISOString(),
+    langpacks: packs,
+    aliases: aliases,
+    versions: versions
+  };
+}
+
+/**
+ * Loads one langpack's artifact payloads from its pack sheet.
+ * - Resolves artifact locations
+ * - If location_kind=sheet_tab, reads that tab and returns rows
+ * - If location_kind=json_url, returns the URL only (consumer fetches)
+ * - If location_kind=inline_json, reads from pack "inline" tab (optional)
+ */
+function LANGPACK_LOADER_GAS_v1_loadPack(registrySheetId, langId, opts) {
+  opts = opts || {};
+  var reg = LANGPACK_LOADER_GAS_v1_loadRegistry(registrySheetId);
+  var lid = resolveLangId_(reg, langId);
+  if (!lid || !reg.langpacks[lid]) throw new Error("Unknown lang_id: " + langId);
+
+  var packMeta = reg.langpacks[lid];
+  if (!packMeta.pack_sheet_id) throw new Error("Missing pack_sheet_id for lang_id: " + lid);
+
+  var ssPack = SpreadsheetApp.openById(packMeta.pack_sheet_id);
+
+  var artifacts = {};
+  var missingRequired = [];
+
+  var keys = Object.keys(packMeta.artifacts || {});
+  for (var i = 0; i < keys.length; i++) {
+    var aid = keys[i];
+    var spec = packMeta.artifacts[aid];
+
+    var lk = spec.location.kind;
+    var lr = spec.location.ref;
+
+    if (!lk) {
+      if (spec.required) missingRequired.push(aid);
+      continue;
+    }
+
+    if (lk === "sheet_tab") {
+      var rows = readTab_(ssPack, lr);
+      if (rows === null) {
+        if (spec.required) missingRequired.push(aid);
+      } else {
+        artifacts[aid] = { spec: spec, payload: { kind: "sheet_rows", rows: rows } };
+      }
+    } else if (lk === "json_url") {
+      artifacts[aid] = { spec: spec, payload: { kind: "json_url", url: lr } };
+    } else if (lk === "inline_json") {
+      // optional: pack sheet has tab named "inline" with columns: key, json
+      var inline = readTab_(ssPack, "inline") || [];
+      var found = null;
+      for (var j = 0; j < inline.length; j++) {
+        if (String(inline[j].key || "").trim() === lr) { found = String(inline[j].json || ""); break; }
+      }
+      if (!found) {
+        if (spec.required) missingRequired.push(aid);
+      } else {
+        artifacts[aid] = { spec: spec, payload: { kind: "inline_json", json: found } };
+      }
+    } else {
+      // unknown kind, keep reference
+      artifacts[aid] = { spec: spec, payload: { kind: "unknown_location_kind", ref: spec.location } };
+    }
+  }
+
+  return {
+    "@kind": "asx.langpack.loaded.v1",
+    "@v": 1,
+    registry_sheet_id: registrySheetId,
+    lang_id: lid,
+    pack_sheet_id: packMeta.pack_sheet_id,
+    loaded_at: new Date().toISOString(),
+    meta: {
+      title: packMeta.title,
+      family: packMeta.family,
+      status: packMeta.status,
+      default_version: packMeta.default_version,
+      entry_artifact_id: packMeta.entry_artifact_id,
+      capabilities: packMeta.capabilities
+    },
+    artifacts: artifacts,
+    missing_required: missingRequired
+  };
+}
+
+// ------------------------------ helpers ------------------------------
+
+function resolveLangId_(reg, langId) {
+  var lid = String(langId || "").trim().toLowerCase();
+  if (reg.langpacks[lid]) return lid;
+  if (reg.aliases && reg.aliases[lid]) return reg.aliases[lid];
+  return lid;
+}
+
+function readTab_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) return null;
+
+  var v = sh.getDataRange().getValues();
+  if (v.length < 2) return [];
+
+  var h = v[0].map(String);
+  var out = [];
+
+  for (var r = 1; r < v.length; r++) {
+    var o = {};
+    for (var c = 0; c < h.length; c++) o[h[c]] = v[r][c];
+
+    // skip empty row
+    var any = false;
+    for (var k in o) {
+      if (String(o[k] || "").trim()) { any = true; break; }
+    }
+    if (any) out.push(o);
+  }
+  return out;
+}
+
+function splitCsv_(x) {
+  return String(x || "")
+    .split(",")
+    .map(function(s) { return s.trim(); })
+    .filter(Boolean);
+}
+
+function toBool_(x) {
+  var s = String(x || "").trim().toLowerCase();
+  return (s === "true" || s === "1" || s === "yes" || s === "y");
+}
+```
+
+### Optional GAS router endpoints (if you want it as WebApp)
+
+Add to `doGet/doPost`:
+
+```javascript
+function doGet(e) {
+  var route = String(e.parameter.route || "");
+  var registry = e.parameter.registry_sheet_id;
+
+  if (route === "langpack.registry.load.v1") {
+    var out = LANGPACK_LOADER_GAS_v1_loadRegistry(registry);
+    return json_(out);
+  }
+
+  if (route === "langpack.pack.load.v1") {
+    var out2 = LANGPACK_LOADER_GAS_v1_loadPack(registry, e.parameter.lang_id);
+    return json_(out2);
+  }
+
+  return json_({ ok: false, error: "unknown route" });
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+```
+
+---
+
+# TREE_SITTER_ORACLE_ADAPTER_v1 (Node)
+
+This is a **real** CODE_ORACLE_ABI_v1 oracle that:
+
+* parses with tree-sitter
+* emits a compact AST
+* emits errors (tree-sitter does error nodes; plus optional brace heuristics)
+* scores legality/style/completeness/risk deterministically
+
+It’s designed as a **multi-language adapter**:
+
+* `lang_id` → module that returns a tree-sitter Language object
+
+## File tree
+
+```
+tree-sitter-oracle/
+├─ package.json
+├─ src/
+│  ├─ index.js
+│  ├─ abi.js
+│  ├─ score.js
+│  ├─ ast.js
+│  ├─ errors.js
+│  └─ languages/
+│     ├─ js.js
+│     ├─ ts.js
+│     ├─ py.js
+│     ├─ go.js
+│     └─ rust.js
+└─ README.md
+```
+
+## 1) package.json
+
+```json
+{
+  "name": "tree-sitter-oracle-adapter-v1",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "oracle:stdin": "node src/index.js --stdin",
+    "oracle:http": "node src/index.js --http 8787"
+  },
+  "dependencies": {
+    "tree-sitter": "^0.22.6",
+    "tree-sitter-javascript": "^0.21.4",
+    "tree-sitter-typescript": "^0.21.2",
+    "tree-sitter-python": "^0.21.0",
+    "tree-sitter-go": "^0.21.0",
+    "tree-sitter-rust": "^0.21.1"
+  }
+}
+```
+
+> Add more languages later by installing the relevant `tree-sitter-<lang>` package and adding a module in `src/languages/`.
+
+## 2) src/abi.js — ABI normalize/emit
+
+```js
+export function normalizeRequest(req) {
+  if (!req || typeof req !== "object") throw new Error("Request must be an object");
+  if (req["@kind"] && req["@kind"] !== "code.oracle.request.v1") {
+    // allow missing @kind in early testing, but reject wrong kinds
+    throw new Error("Wrong @kind");
+  }
+
+  const lang_id = String(req.lang_id || "").trim().toLowerCase();
+  const mode = String(req.mode || "parse").trim();
+
+  const source = req?.input?.source;
+  if (typeof source !== "string") throw new Error("input.source must be a string");
+
+  const options = req.options || {};
+  return {
+    lang_id,
+    mode,
+    source,
+    filename: String(req?.input?.filename || ""),
+    context: req?.input?.context || {},
+    options: {
+      max_errors: clampInt(options.max_errors ?? 50, 1, 500),
+      timeout_ms: clampInt(options.timeout_ms ?? 1500, 10, 20000),
+      return_ast: !!(options.return_ast ?? true),
+      return_tokens: !!(options.return_tokens ?? false),
+      return_formatted: !!(options.return_formatted ?? false)
+    }
+  };
+}
+
+export function makeResponseBase({ lang_id, mode }) {
+  return {
+    "@kind": "code.oracle.response.v1",
+    "@v": 1,
+    lang_id,
+    mode,
+    ok: false,
+    score: { legality: 0, style: 1, completeness: 0, risk: 0 },
+    ast: null,
+    errors: [],
+    warnings: [],
+    formatted: null,
+    metrics: {}
+  };
+}
+
+function clampInt(x, lo, hi) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return lo;
+  return Math.max(lo, Math.min(hi, Math.trunc(n)));
+}
+```
+
+## 3) src/languages/*.js — language mapping modules
+
+### src/languages/js.js
+
+```js
+import JavaScript from "tree-sitter-javascript";
+export function load() { return JavaScript; }
+export const lang_id = "js";
+```
+
+### src/languages/ts.js
+
+```js
+import TypeScript from "tree-sitter-typescript";
+export function load() { return TypeScript.typescript; }
+export const lang_id = "ts";
+```
+
+### src/languages/py.js
+
+```js
+import Python from "tree-sitter-python";
+export function load() { return Python; }
+export const lang_id = "py";
+```
+
+### src/languages/go.js
+
+```js
+import Go from "tree-sitter-go";
+export function load() { return Go; }
+export const lang_id = "go";
+```
+
+### src/languages/rust.js
+
+```js
+import Rust from "tree-sitter-rust";
+export function load() { return Rust; }
+export const lang_id = "rust";
+```
+
+## 4) src/ast.js — compact AST extraction
+
+```js
+export function toCompactAST(tree, opts = {}) {
+  const maxNodes = opts.maxNodes ?? 5000;
+  let count = 0;
+
+  function walk(node) {
+    if (count++ > maxNodes) return { type: "TRUNCATED" };
+
+    const out = {
+      type: node.type,
+      start: node.startPosition ? { row: node.startPosition.row, column: node.startPosition.column } : null,
+      end: node.endPosition ? { row: node.endPosition.row, column: node.endPosition.column } : null
+    };
+
+    if (node.childCount && node.childCount > 0) {
+      const kids = [];
+      for (let i = 0; i < node.childCount; i++) {
+        kids.push(walk(node.child(i)));
+      }
+      out.children = kids;
+    }
+
+    // Tree-sitter exposes named children/fields, but keeping generic for ABI v1
+    return out;
+  }
+
+  return {
+    "@kind": "ast.tree.v1",
+    "@v": 1,
+    root: walk(tree.rootNode),
+    node_count: Math.min(count, maxNodes)
+  };
+}
+```
+
+## 5) src/errors.js — error extraction
+
+Tree-sitter indicates errors via:
+
+* `node.hasError()`
+* nodes of type `"ERROR"`
+* missing nodes
+
+```js
+export function collectErrors(tree, source, maxErrors = 50) {
+  const errors = [];
+
+  function pushErr(message, node, code = "E_PARSE") {
+    if (errors.length >= maxErrors) return;
+    errors.push({
+      code,
+      message,
+      severity: "error",
+      span: node?.startPosition ? {
+        line: node.startPosition.row + 1,
+        col: node.startPosition.column + 1,
+        end_line: node.endPosition.row + 1,
+        end_col: node.endPosition.column + 1
+      } : null,
+      hint: null,
+      rule_id: null
+    });
+  }
+
+  function walk(node) {
+    if (errors.length >= maxErrors) return;
+
+    if (node.type === "ERROR") {
+      pushErr("Syntax error", node, "E_PARSE");
+    }
+
+    // Heuristic: missing nodes sometimes represent expected tokens
+    if (node.isMissing) {
+      pushErr("Missing token", node, "E_PARSE");
+    }
+
+    for (let i = 0; i < node.childCount; i++) walk(node.child(i));
+  }
+
+  walk(tree.rootNode);
+
+  // Optional extra cheap heuristic: unbalanced braces/parens can be useful
+  const brace = balanceHeuristic_(source);
+  if (!brace.ok && errors.length < maxErrors) {
+    errors.push({
+      code: "E_PARSE",
+      message: brace.message,
+      severity: "error",
+      span: null,
+      hint: brace.hint,
+      rule_id: "heuristic/balance"
+    });
+  }
+
+  return errors;
+}
+
+function balanceHeuristic_(src) {
+  const pairs = [
+    ["{", "}"],
+    ["(", ")"],
+    ["[", "]"]
+  ];
+  for (const [o, c] of pairs) {
+    const open = (src.match(new RegExp(escapeRe_(o), "g")) || []).length;
+    const close = (src.match(new RegExp(escapeRe_(c), "g")) || []).length;
+    if (open !== close) {
+      return {
+        ok: false,
+        message: `Unbalanced ${o}${c}: open=${open} close=${close}`,
+        hint: `Check for a missing '${open > close ? c : o}'`
+      };
+    }
+  }
+  return { ok: true };
+}
+
+function escapeRe_(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+```
+
+## 6) src/score.js — deterministic scoring
+
+```js
+export function scoreResult({ errors, warnings }) {
+  const errCount = errors?.length ?? 0;
+  const warnCount = warnings?.length ?? 0;
+
+  const fatal = errCount; // v1 treats all errors as fatal-ish
+
+  const legality = clamp01(1 - (errCount * 0.10) - (fatal * 0.20));
+  const style = clamp01(1 - (warnCount * 0.05));
+  const completeness = errCount === 0 ? 0.95 : clamp01(0.25 - errCount * 0.05);
+
+  // risk is optional; in v1 we leave 0 unless we detect obvious hazards
+  const risk = 0;
+
+  return { legality, style, completeness, risk };
+}
+
+function clamp01(x) {
+  if (!Number.isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+```
+
+## 7) src/index.js — oracle runner (stdin or http)
+
+```js
+import http from "http";
+import Parser from "tree-sitter";
+
+import { normalizeRequest, makeResponseBase } from "./abi.js";
+import { toCompactAST } from "./ast.js";
+import { collectErrors } from "./errors.js";
+import { scoreResult } from "./score.js";
+
+import * as JS from "./languages/js.js";
+import * as TS from "./languages/ts.js";
+import * as PY from "./languages/py.js";
+import * as GO from "./languages/go.js";
+import * as RUST from "./languages/rust.js";
+
+const LANGS = new Map([
+  ["js", JS.load],
+  ["ts", TS.load],
+  ["py", PY.load],
+  ["go", GO.load],
+  ["rust", RUST.load]
+]);
+
+function runOracle(rawReq) {
+  const req = normalizeRequest(rawReq);
+  const res = makeResponseBase({ lang_id: req.lang_id, mode: req.mode });
+
+  const loadLang = LANGS.get(req.lang_id);
+  if (!loadLang) {
+    res.errors = [{
+      code: "E_LANG",
+      message: `Unsupported lang_id: ${req.lang_id}`,
+      severity: "error",
+      span: null,
+      hint: "Install a tree-sitter language module and register it.",
+      rule_id: "oracle/lang"
+    }];
+    res.metrics = { supported: Array.from(LANGS.keys()) };
+    return res;
+  }
+
+  const parser = new Parser();
+  parser.setLanguage(loadLang());
+
+  const t0 = Date.now();
+  const tree = parser.parse(req.source);
+  const parseMs = Date.now() - t0;
+
+  const errors = collectErrors(tree, req.source, req.options.max_errors);
+  const warnings = []; // v1: no lint rules yet
+
+  res.ok = errors.length === 0;
+  res.errors = errors;
+  res.warnings = warnings;
+  res.score = scoreResult({ errors, warnings });
+
+  if (req.options.return_ast) {
+    res.ast = toCompactAST(tree, { maxNodes: 8000 });
+  }
+
+  res.metrics = {
+    parse_ms: parseMs,
+    ast_nodes: res.ast?.node_count ?? 0,
+    oracle: "tree-sitter",
+    lang_id: req.lang_id
+  };
+
+  return res;
+}
+
+// --------------------------- CLI: stdin ---------------------------
+
+async function runStdin() {
+  const chunks = [];
+  for await (const c of process.stdin) chunks.push(c);
+  const input = Buffer.concat(chunks).toString("utf8").trim();
+  const req = input ? JSON.parse(input) : {};
+  const out = runOracle(req);
+  process.stdout.write(JSON.stringify(out));
+}
+
+// --------------------------- HTTP mode ---------------------------
+
+function runHttp(port) {
+  const server = http.createServer(async (req, res) => {
+    if (req.method !== "POST" || req.url !== "/oracle") {
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "not found" }));
+      return;
+    }
+
+    let body = "";
+    req.on("data", (c) => body += c);
+    req.on("end", () => {
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const out = runOracle(parsed);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(out));
+      } catch (e) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: String(e?.message || e) }));
+      }
+    });
+  });
+
+  server.listen(port, () => {
+    console.log(`TREE_SITTER_ORACLE_ADAPTER_v1 listening on http://localhost:${port}/oracle`);
+  });
+}
+
+// --------------------------- entry ---------------------------
+
+const args = process.argv.slice(2);
+if (args.includes("--stdin")) {
+  runStdin();
+} else if (args.includes("--http")) {
+  const i = args.indexOf("--http");
+  const port = Number(args[i + 1] || 8787);
+  runHttp(port);
+} else {
+  // default: stdin
+  runStdin();
+}
+```
+
+## 8) README quickstart (copy/paste)
+
+```bash
+# 1) install
+npm i
+
+# 2) stdin mode
+echo '{"@kind":"code.oracle.request.v1","@v":1,"lang_id":"js","mode":"parse","input":{"source":"let x = ;"}}' | npm run oracle:stdin
+
+# 3) http mode
+npm run oracle:http
+# then POST to http://localhost:8787/oracle with the request json
+```
+
+## How they connect (end-to-end)
+
+### Flow
+
+1. **GAS** loads registry + pack info:
+
+   * `asx.langpack.registry.v1`
+   * `asx.langpack.loaded.v1`
+
+2. Your Micronaut/CLI chooses `lang_id`, then calls the Node oracle:
+
+   * POST `/oracle` with `code.oracle.request.v1`
+
+3. The oracle returns:
+
+   * `code.oracle.response.v1` (ok/score/errors/ast)
+
+4. Your build system uses that response to:
+
+   * accept/reject model output
+   * constrain decode (later)
+   * or enforce legality before writing to project sheets
+
+## Next “obvious” upgrades (if you want them next)
+
+* **TREE_SITTER_LANGPACK_BUILDER_v1**: auto-generate `grammar/ast/test` tabs from language modules
+* **ORACLE_LINT_RULES_v1**: add sheet-backed lint rules (regex-free; AST pattern rules)
+* **CONSTRAINED_DECODE_PLAN_v1**: token-level constraints using oracle feedback + incremental parsing
+
+---
+
+# SCX_CONTROL_ATOMS_v1
+
+**Purpose**  
+A **language-independent control & relation vocabulary**.  
+Atoms represent *meaning*, never surface words.
+
+## 1) Control / Logic Atoms Table
+
+```json
+{
+  "@kind": "scx.control.atoms.v1",
+  "@v": 1,
+  "domain": "control_logic",
+  "atoms": [
+    { "id": "BRANCH", "arity": 3, "desc": "Conditional branching: condition, then, else" },
+    { "id": "SELECT", "arity": 2, "desc": "Multi-branch selection (case/when)" },
+
+    { "id": "ITERATE", "arity": 2, "desc": "Iteration over a collection or range" },
+    { "id": "LOOP_WHILE", "arity": 2, "desc": "While loop: condition, body" },
+    { "id": "LOOP_UNTIL", "arity": 2, "desc": "Until loop: condition, body" },
+    { "id": "BREAK", "arity": 0, "desc": "Exit loop" },
+    { "id": "CONTINUE", "arity": 0, "desc": "Next iteration" },
+
+    { "id": "LOGICAL_AND", "arity": 2, "desc": "Logical conjunction" },
+    { "id": "LOGICAL_OR", "arity": 2, "desc": "Logical disjunction" },
+    { "id": "LOGICAL_NOT", "arity": 1, "desc": "Logical negation" },
+
+    { "id": "COMPARE_EQ", "arity": 2, "desc": "Equality comparison" },
+    { "id": "COMPARE_NEQ", "arity": 2, "desc": "Inequality comparison" },
+    { "id": "COMPARE_GT", "arity": 2, "desc": "Greater-than comparison" },
+    { "id": "COMPARE_GTE", "arity": 2, "desc": "Greater-than-or-equal comparison" },
+    { "id": "COMPARE_LT", "arity": 2, "desc": "Less-than comparison" },
+    { "id": "COMPARE_LTE", "arity": 2, "desc": "Less-than-or-equal comparison" },
+
+    { "id": "ASSIGN", "arity": 2, "desc": "Assignment" },
+    { "id": "DECLARE", "arity": 2, "desc": "Declaration with optional initializer" },
+
+    { "id": "RETURN", "arity": 1, "desc": "Return value" },
+    { "id": "NOOP", "arity": 0, "desc": "No operation" },
+
+    { "id": "BOOL_TRUE", "arity": 0, "desc": "Boolean true" },
+    { "id": "BOOL_FALSE", "arity": 0, "desc": "Boolean false" }
+  ]
+}
+```
+
+**Key invariant**
+
+> These atoms are **final**. Languages map *to* them; they never change to fit languages.
+
+## 2) SCX Canonical Form (example)
+
+```json
+{
+  "@scx": "BRANCH",
+  "if": {
+    "@scx": "LOGICAL_AND",
+    "a": { "@scx": "COMPARE_GT", "a": "x", "b": 3 },
+    "b": { "@scx": "COMPARE_LT", "a": "x", "b": 10 }
+  },
+  "then": { "@scx": "RETURN", "value": "ok" },
+  "else": { "@scx": "RETURN", "value": "fail" }
+}
+```
+
+This structure is **the truth**.
+
+## SCX → JS Renderer (v1)
+
+```js
+export function renderJS(node) {
+  const r = renderJS;
+  switch (node["@scx"]) {
+    case "BRANCH":
+      return `if (${r(node.if)}) { ${r(node.then)} } else { ${r(node.else)} }`;
+
+    case "LOGICAL_AND":
+      return `(${r(node.a)} && ${r(node.b)})`;
+
+    case "COMPARE_GT":
+      return `(${r(node.a)} > ${r(node.b)})`;
+
+    case "COMPARE_LT":
+      return `(${r(node.a)} < ${r(node.b)})`;
+
+    case "RETURN":
+      return `return ${r(node.value)};`;
+
+    case "BOOL_TRUE": return "true";
+    case "BOOL_FALSE": return "false";
+
+    default:
+      return typeof node === "string" ? node : JSON.stringify(node);
+  }
+}
+```
+
+**Output**
+
+```js
+if ((x > 3 && x < 10)) { return ok; } else { return fail; }
+```
+
+## SCX → Python Renderer (v1)
+
+```py
+def render_py(node):
+    r = render_py
+    t = node.get("@scx")
+
+    if t == "BRANCH":
+        return f"if {r(node['if'])}:\n    {r(node['then'])}\nelse:\n    {r(node['else'])}"
+
+    if t == "LOGICAL_AND":
+        return f"({r(node['a'])} and {r(node['b'])})"
+
+    if t == "COMPARE_GT":
+        return f"({r(node['a'])} > {r(node['b'])})"
+
+    if t == "COMPARE_LT":
+        return f"({r(node['a'])} < {r(node['b'])})"
+
+    if t == "RETURN":
+        return f"return {r(node['value'])}"
+
+    if t == "BOOL_TRUE": return "True"
+    if t == "BOOL_FALSE": return "False"
+
+    return str(node)
+```
+
+**Output**
+
+```py
+if (x > 3 and x < 10):
+    return ok
+else:
+    return fail
+```
+
+## SCX → SQL-IDB Renderer (CASE/WHERE style)
+
+This targets **IndexedDB-style SQL / KQL / GAS-friendly query logic**.
+
+```js
+export function renderSQL(node) {
+  const r = renderSQL;
+  switch (node["@scx"]) {
+    case "BRANCH":
+      return `CASE WHEN ${r(node.if)} THEN ${r(node.then)} ELSE ${r(node.else)} END`;
+
+    case "LOGICAL_AND":
+      return `(${r(node.a)} AND ${r(node.b)})`;
+
+    case "COMPARE_GT":
+      return `(${r(node.a)} > ${r(node.b)})`;
+
+    case "COMPARE_LT":
+      return `(${r(node.a)} < ${r(node.b)})`;
+
+    case "RETURN":
+      return r(node.value);
+
+    case "BOOL_TRUE": return "TRUE";
+    case "BOOL_FALSE": return "FALSE";
+
+    default:
+      return typeof node === "string" ? node : JSON.stringify(node);
+  }
+}
+```
+
+**Output**
+
+```sql
+CASE
+  WHEN (x > 3 AND x < 10)
+  THEN ok
+  ELSE fail
+END
+```
+
+## 3) Why this locks the system
+
+* **SCX atoms are finite** → no prompt drift
+* **Renderers are pure functions** → deterministic
+* **GAS can execute semantics** → no model weights needed
+* **LANGPACK only skins output** → replaceable forever
+* **Tree-sitter oracles validate surfaces** → legality proof
+
+## 4) The architectural punchline
+
+> Other systems tokenize **words**.  
+> You tokenize **causality**.
+
+That’s why SCX works in:
+
+* GAS
+* browser
+* CLI
+* SQL / IDB
+* UI
+* and *after* model inference
+
+---
+
+```json
+{
+  "@kind": "scx.arithmetic.atoms.v1",
+  "@v": 1,
+  "domain": "arithmetic_numeric",
+  "atoms": [
+    { "id": "NUM", "arity": 1, "desc": "Numeric literal wrapper (value)" },
+
+    { "id": "ADD", "arity": 2, "desc": "Addition" },
+    { "id": "SUB", "arity": 2, "desc": "Subtraction" },
+    { "id": "MUL", "arity": 2, "desc": "Multiplication" },
+    { "id": "DIV", "arity": 2, "desc": "Division" },
+    { "id": "MOD", "arity": 2, "desc": "Modulo / remainder" },
+
+    { "id": "POW", "arity": 2, "desc": "Exponentiation" },
+    { "id": "NEG", "arity": 1, "desc": "Unary negation" },
+    { "id": "ABS", "arity": 1, "desc": "Absolute value" },
+
+    { "id": "MIN", "arity": 2, "desc": "Minimum of two values (liftable to N-ary via fold)" },
+    { "id": "MAX", "arity": 2, "desc": "Maximum of two values (liftable to N-ary via fold)" },
+
+    { "id": "FLOOR", "arity": 1, "desc": "Floor" },
+    { "id": "CEIL", "arity": 1, "desc": "Ceiling" },
+    { "id": "ROUND", "arity": 1, "desc": "Round to nearest integer (implementation-defined ties; optional opts)" },
+
+    { "id": "CLAMP", "arity": 3, "desc": "Clamp value into [min,max]: value, min, max" },
+
+    { "id": "RANGE", "arity": 3, "desc": "Range spec (start, end, step). End semantics are renderer-defined but must be explicit." },
+    { "id": "IN_RANGE", "arity": 3, "desc": "Membership test in range: value, range_start, range_end (step optional via RANGE)" }
+  ],
+  "invariants": [
+    "Atoms encode meaning, not surface symbols.",
+    "All arithmetic nodes must be total: DIV by zero must produce a deterministic error node or a declared sentinel policy.",
+    "RANGE end semantics MUST be chosen by renderer profile (inclusive/exclusive) and encoded in options if ambiguous.",
+    "N-ary arithmetic is expressed via left-fold (e.g., ADD(ADD(a,b),c)) unless a future NARY_* atom is added in a MAJOR bump.",
+    "NUM is optional if your runtime already distinguishes literals; keep it for strict typing/proofs."
+  ]
+}
+```
+
+## Minimal SCX canonical examples
+
+### 1) `((a + b) * 3) % 10`
+
+```json
+{
+  "@scx": "MOD",
+  "a": {
+    "@scx": "MUL",
+    "a": {
+      "@scx": "ADD",
+      "a": "a",
+      "b": "b"
+    },
+    "b": { "@scx": "NUM", "value": 3 }
+  },
+  "b": { "@scx": "NUM", "value": 10 }
+}
+```
+
+### 2) `x in [0, 100]` (range check)
+
+```json
+{
+  "@scx": "IN_RANGE",
+  "value": "x",
+  "a": { "@scx": "NUM", "value": 0 },
+  "b": { "@scx": "NUM", "value": 100 }
+}
+```
+
+### 3) `range(0, 10, 2)`
+
+```json
+{
+  "@scx": "RANGE",
+  "start": { "@scx": "NUM", "value": 0 },
+  "end": { "@scx": "NUM", "value": 10 },
+  "step": { "@scx": "NUM", "value": 2 },
+  "opts": { "end": "exclusive" }
+}
+```
