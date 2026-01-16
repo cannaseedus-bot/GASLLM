@@ -1,6 +1,1612 @@
-Your vision for a **geometric tokenizer and inference system** is groundbreaking—it bridges symbolic geometry, neural networks, and compression-aware visualization into a unified framework. Below is a refined, actionable blueprint to implement this system, focusing on **horizontal fold compression**, **geometric tokenization**, and **epoch-weighted tensor compression** using your GGL (Geometric Glyph Language) and `.ggltensors` format.
+Let’s define a **practical, open-source SVG template format** for your **glyph-compressed design system**. This will encode **design rules**, **compression folds**, and **crowd-sourced ingenuity** in a way that’s **KUHUL-compatible**, **browser-native**, and **laptop-friendly**.
 
 ---
+
+## **1. SVG Template Format Spec**
+### **A. Core Structure**
+Each template is an **SVG file** with:
+- **Glyphs** (`◯`, `□`, `△`, custom) as **design primitives**.
+- **Data attributes** for rules, folds, and metadata.
+- **Layers** (`<g>`) for design domains (layout, typography, color, etc.).
+
+**Example: `modern-store-v1.svg`**
+```xml
+<!--
+  Template: Modern Store v1
+  Popularity: 0.92 (crowd-sourced)
+  Folds: DATA_FOLD (layout), UI_FOLD (typography), CODE_FOLD (color), AUTH_FOLD (interaction)
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="100%"
+  height="100%"
+  data-template="modern-store-v1"
+  data-popularity="0.92"
+  data-tags="modern,store,ecommerce,minimalist"
+  data-author="mpickett"
+  data-license="MIT"
+>
+
+  <!-- ===== LAYOUT FOLD (⟁DATA_FOLD⟁) ===== -->
+  <g data-fold="⟁DATA_FOLD⟁" data-role="layout" data-compression="0.92">
+    <!-- 12-column grid (glyph: □) -->
+    <rect
+      x="0" y="0" width="100%" height="100%"
+      fill="none"
+      stroke="#eee" stroke-width="1" stroke-dasharray="5,5"
+      data-glyph="□"
+      data-rule="grid-12-col"
+      data-description="Responsive 12-column grid system"
+      data-weight="0.95"
+    />
+    <!-- Hero section focal point (glyph: ◯) -->
+    <circle
+      cx="50%" cy="20%" r="15%"
+      fill="none" stroke="#3498db" stroke-width="2"
+      data-glyph="◯"
+      data-rule="hero-focal-point"
+      data-description="Primary hero image/cta area"
+      data-weight="0.90"
+    />
+    <!-- Sidebar (glyph: □) -->
+    <rect
+      x="80%" y="10%" width="18%" height="70%"
+      fill="#f8f9fa" stroke="#dee2e6"
+      data-glyph="□"
+      data-rule="sidebar"
+      data-description="Secondary navigation/content"
+      data-weight="0.85"
+    />
+  </g>
+
+  <!-- ===== TYPOGRAPHY FOLD (⟁UI_FOLD⟁) ===== -->
+  <g data-fold="⟁UI_FOLD⟁" data-role="typography" data-compression="0.88">
+    <!-- Heading 1 (glyph: T) -->
+    <text
+      x="10%" y="25%"
+      font-family="Inter" font-size="24" font-weight="700"
+      fill="#2c3e50"
+      data-glyph="T"
+      data-rule="hierarchy-h1"
+      data-description="Primary heading"
+      data-weight="0.90"
+    >Store Name</text>
+    <!-- Body text (glyph: t) -->
+    <text
+      x="10%" y="35%"
+      font-family="Inter" font-size="16" font-weight="400"
+      fill="#495057"
+      data-glyph="t"
+      data-rule="hierarchy-body"
+      data-description="Primary body copy"
+      data-weight="0.80"
+    >Welcome to our modern store.</text>
+  </g>
+
+  <!-- ===== COLOR FOLD (⟁CODE_FOLD⟁) ===== -->
+  <g data-fold="⟁CODE_FOLD⟁" data-role="color" data-compression="0.95">
+    <!-- Primary accent (glyph: □) -->
+    <rect
+      x="0" y="0" width="100%" height="10%"
+      fill="#3498db"
+      data-glyph="□"
+      data-rule="accent-primary"
+      data-description="Primary brand color"
+      data-weight="0.88"
+      data-hex="#3498db"
+    />
+    <!-- Secondary accent (glyph: □) -->
+    <rect
+      x="0" y="90%" width="100%" height="10%"
+      fill="#2c3e50"
+      data-glyph="□"
+      data-rule="accent-secondary"
+      data-description="Secondary brand color"
+      data-weight="0.85"
+      data-hex="#2c3e50"
+    />
+  </g>
+
+  <!-- ===== INTERACTION FOLD (⟁AUTH_FOLD⟁) ===== -->
+  <g data-fold="⟁AUTH_FOLD⟁" data-role="interaction" data-compression="0.85">
+    <!-- CTA button (glyph: □) -->
+    <rect
+      x="80%" y="15%" width="15%" height="5%"
+      rx="5" fill="#e74c3c"
+      data-glyph="□"
+      data-rule="cta-button"
+      data-description="Primary call-to-action"
+      data-weight="0.92"
+      data-hex="#e74c3c"
+    />
+    <!-- Navigation (glyph: △) -->
+    <path
+      d="M10,90 L20,80 L30,90 Z"
+      fill="#2c3e50"
+      data-glyph="△"
+      data-rule="nav-dropdown"
+      data-description="Primary navigation indicator"
+      data-weight="0.80"
+    />
+  </g>
+
+  <!-- ===== META ===== -->
+  <metadata>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+      <rdf:Description about="modern-store-v1">
+        <author>Michael Pickett</author>
+        <license>MIT</license>
+        <usage-count>1242</usage-count>
+        <last-updated>2026-01-06</last-updated>
+        <dependencies>Inter Font, KUHUL v0.4.2</dependencies>
+      </rdf:Description>
+    </rdf:RDF>
+  </metadata>
+</svg>
+```
+
+---
+
+## **2. Glyph Library**
+### **A. Base Glyphs & Meanings**
+| Glyph | Name       | Role                          | Example Rules                     |
+|-------|------------|-------------------------------|-----------------------------------|
+| `□`   | Square     | Containers, grids, buttons    | `grid-12-col`, `sidebar`, `cta-button` |
+| `◯`   | Circle     | Focal points, heroes, avatars | `hero-focal-point`, `avatar`      |
+| `△`   | Triangle   | Indicators, pointers, nav     | `nav-dropdown`, `tooltip`        |
+| `T`   | Text-H1    | Primary headings              | `hierarchy-h1`, `page-title`     |
+| `t`   | Text-Body  | Body copy                     | `hierarchy-body`, `caption`      |
+| `─`   | Line       | Dividers, rules               | `divider`, `hr`                  |
+| `⟶`   | Arrow      | Actions, flows                | `next-button`, `carousel-nav`    |
+| `◻`   | Square-D   | Dynamic containers            | `card`, `modal`                  |
+| `◎`   | Circle-D   | Dynamic focal points          | `featured-product`, `logo`       |
+
+**Custom Glyphs**:
+- Define as `<symbol>` in SVG and reference with `data-glyph="custom-icon"`.
+- Example:
+  ```xml
+  <symbol id="cart" viewBox="0 0 24 24" data-glyph="🛒">
+    <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2z..."/>
+  </symbol>
+  ```
+
+---
+
+## **3. Data Attributes Spec**
+| Attribute          | Type     | Description                                                                 | Example                          |
+|--------------------|----------|-----------------------------------------------------------------------------|----------------------------------|
+| `data-fold`        | string   | Compression fold (from your `🗜️COMPRESSION_FOLD_VISUAL_MAPPING`).          | `⟁DATA_FOLD⟁`                   |
+| `data-role`        | string   | Design domain (layout, typography, color, etc.).                          | `layout`                         |
+| `data-glyph`       | string   | Glyph identifier (□, ◯, T, etc.).                                          | `□`                             |
+| `data-rule`        | string   | Design rule/pattern.                                                        | `grid-12-col`                   |
+| `data-weight`      | float    | Importance (0–1) for neural selection.                                      | `0.95`                           |
+| `data-description` | string   | Human-readable description.                                                 | "Primary hero image area"       |
+| `data-compression` | float    | Fold compression ratio.                                                     | `0.92`                           |
+| `data-hex`         | string   | Color value (for color glyphs).                                             | `#3498db`                        |
+| `data-tags`        | string   | Comma-separated tags for matching.                                          | `modern,minimalist,ecommerce`   |
+| `data-popularity`  | float    | Crowd-sourced score (0–1).                                                  | `0.92`                           |
+
+---
+
+## **4. Design Rules (data-rule)**
+### **A. Layout Rules**
+| Rule               | Description                                                                 | Glyphs       |
+|--------------------|-----------------------------------------------------------------------------|--------------|
+| `grid-12-col`      | 12-column responsive grid.                                                  | `□`          |
+| `hero-focal-point` | Primary hero/image area (golden ratio placement).                          | `◯`          |
+| `sidebar`          | Secondary content area.                                                     | `□`          |
+| `card`             | Content card with shadow/hover.                                             | `◻`          |
+| `modal`            | Overlay dialog.                                                             | `◻`          |
+
+### **B. Typography Rules**
+| Rule            | Description                              | Glyphs |
+|-----------------|------------------------------------------|--------|
+| `hierarchy-h1`  | Primary heading (24–32px).               | `T`    |
+| `hierarchy-h2`  | Secondary heading (20–24px).             | `T`    |
+| `hierarchy-body`| Body copy (14–16px).                     | `t`    |
+| `caption`       | Small text (12–14px).                    | `t`    |
+
+### **C. Color Rules**
+| Rule              | Description                              | Glyphs |
+|-------------------|------------------------------------------|--------|
+| `accent-primary`  | Primary brand color.                     | `□`    |
+| `accent-secondary`| Secondary brand color.                   | `□`    |
+| `background`      | Page background.                         | `□`    |
+| `text-primary`    | Primary text color.                      | `T`, `t` |
+
+### **D. Interaction Rules**
+| Rule           | Description                              | Glyphs |
+|----------------|------------------------------------------|--------|
+| `cta-button`   | Call-to-action button.                   | `□`    |
+| `nav-dropdown` | Navigation dropdown indicator.           | `△`    |
+| `tooltip`      | Hover tooltip.                           | `△`    |
+
+---
+
+## **5. Fold-Specific Compression**
+Each `<g data-fold="...">` group is compressed **independently** using your **SVD + quantization** approach.
+**Example**:
+```python
+def compress_template(template_path: str) -> dict:
+    template = parse_svg(template_path)
+    compressed = {}
+    for fold in template.find_all_groups_by_fold():
+        glyphs = extract_glyphs(fold)
+        embeddings = [glyph_to_embedding(g) for g in glyphs]
+        # Apply SVD per fold.
+        U, S, Vt = svd(embeddings)
+        k = int(len(S) * float(fold.get("data-compression")))  # Use fold's ratio.
+        compressed[fold.get("data-fold")] = {
+            "U": U[:, :k],
+            "S": S[:k],
+            "Vt": Vt[:k, :],
+            "glyphs": [g.get("data-glyph") for g in glyphs]
+        }
+    return compressed
+```
+
+---
+
+## **6. KUHUL/AST Integration**
+### **A. SVG → AST Mapping**
+```javascript
+// Example: Convert SVG to KUHUL AST.
+const ast = {
+  type: "Template",
+  name: "modern-store-v1",
+  children: [
+    {
+      type: "Layout",
+      fold: "⟁DATA_FOLD⟁",
+      compression: 0.92,
+      children: [
+        {
+          type: "Grid",
+          glyph: "□",
+          rule: "grid-12-col",
+          properties: { columns: 12, gap: "1rem" }
+        },
+        {
+          type: "Hero",
+          glyph: "◯",
+          rule: "hero-focal-point",
+          properties: { position: "50% 20%", radius: "15%" }
+        }
+      ]
+    },
+    {
+      type: "Typography",
+      fold: "⟁UI_FOLD⟁",
+      compression: 0.88,
+      children: [
+        {
+          type: "Heading",
+          glyph: "T",
+          rule: "hierarchy-h1",
+          properties: { fontFamily: "Inter", fontSize: "24px" }
+        }
+      ]
+    }
+  ]
+};
+```
+
+### **B. AST → Executable Code**
+Use **KUHUL’s EA SYNTAX** to render the AST in the browser:
+```javascript
+KUHUL.render(ast, document.getElementById("app"));
+```
+
+---
+
+## **7. Template Validation**
+Add a **schema validator** to ensure templates follow the spec:
+```javascript
+const templateSchema = {
+  required: ["data-template", "data-popularity"],
+  properties: {
+    "data-template": { type: "string" },
+    "data-popularity": { type: "number", minimum: 0, maximum: 1 },
+    "g": {
+      required: ["data-fold", "data-role"],
+      properties: {
+        "data-fold": { enum: ["⟁DATA_FOLD⟁", "⟁UI_FOLD⟁", "⟁CODE_FOLD⟁", "⟁AUTH_FOLD⟁"] },
+        "data-role": { type: "string" },
+        "*": {  // Any child element.
+          required: ["data-glyph", "data-rule"],
+          properties: {
+            "data-glyph": { type: "string" },
+            "data-rule": { type: "string" },
+            "data-weight": { type: "number", minimum: 0, maximum: 1 }
+          }
+        }
+      }
+    }
+  }
+};
+
+function validateTemplate(svgString) {
+  const svg = new DOMParser().parseFromString(svgString, "image/svg+xml");
+  return ajv.validate(templateSchema, svg.documentElement);
+}
+```
+
+---
+
+## **8. Example Workflow**
+### **Step 1: Create a Template**
+```xml
+<!-- minimal-blog.svg -->
+<svg data-template="minimal-blog" data-popularity="0.85" data-tags="blog,minimal,writing">
+  <g data-fold="⟁DATA_FOLD⟁" data-role="layout" data-compression="0.90">
+    <rect data-glyph="□" data-rule="grid-8-col" data-weight="0.9"/>
+    <circle data-glyph="◯" data-rule="hero-avatar" data-weight="0.8"/>
+  </g>
+  <g data-fold="⟁UI_FOLD⟁" data-role="typography" data-compression="0.80">
+    <text data-glyph="T" data-rule="hierarchy-h1" data-weight="0.95">Blog Title</text>
+  </g>
+</svg>
+```
+
+### **Step 2: Compress & Store**
+```bash
+python compressor.py minimal-blog.svg -o templates/minimal-blog.svgz
+```
+
+### **Step 3: Use in App**
+```javascript
+const template = await fetchTemplate("minimal-blog.svgz");
+const ast = KUHUL.parseSVG(template);
+KUHUL.render(ast, document.body);
+```
+
+---
+
+## **9. Crowd-Sourced Updates**
+### **A. GitHub Flow**
+1. Users **fork the `templates/` repo**.
+2. They **edit/add templates** and submit PRs.
+3. A **bot validates** the template against the schema.
+4. **Popularity is updated** via GitHub reactions (⬆/⬇).
+
+### **B. Real-Time Voting**
+```javascript
+// Frontend voting UI.
+document.querySelectorAll("[data-template]").forEach(template => {
+  template.querySelector(".upvote").addEventListener("click", () => {
+    const popularity = parseFloat(template.getAttribute("data-popularity")) + 0.01;
+    template.setAttribute("data-popularity", popularity.toFixed(2));
+    github.updateTemplatePopularity(template.id, popularity);
+  });
+});
+```
+
+---
+
+
+---
+
+## **1. Glyph-Compressed Design Templates**
+### **A. SVG/XML as a "Design DNA" Feed**
+Each SVG file is a **compressed template** where:
+- **Glyphs** (`◯`, `□`, `△`, custom shapes) encode **design rules** (e.g., golden ratio spacing, typography hierarchy).
+- **Data attributes** store **compression folds** (your `🗜️COMPRESSION_FOLD_VISUAL_MAPPING`) and **user preference weights** (e.g., `data-popularity="0.92"`).
+- **Folds** represent **design domains** (layout, color, typography, interaction).
+
+**Example: Modern Store Template**
+```xml
+<!-- Template: "modern-store-v1" (compressed popularity: 0.92) -->
+<svg xmlns="http://www.w3.org/2000/svg" data-template="modern-store" data-popularity="0.92">
+  <!-- Layout Fold (⟁DATA_FOLD⟁) -->
+  <g data-fold="⟁DATA_FOLD⟁" data-role="layout">
+    <rect x="0" y="0" width="100%" height="100%" fill="#f8f9fa" data-glyph="□" data-rule="grid-12-col"/>
+    <circle cx="50%" cy="20%" r="15%" fill="#3498db" data-glyph="◯" data-rule="hero-focal-point"/>
+  </g>
+  <!-- Typography Fold (⟁UI_FOLD⟁) -->
+  <g data-fold="⟁UI_FOLD⟁" data-role="typography">
+    <text x="10%" y="30%" font-family="Inter" font-size="24" data-glyph="T" data-rule="hierarchy-h1"/>
+    <text x="10%" y="40%" font-family="Inter" font-size="16" data-glyph="t" data-rule="hierarchy-body"/>
+  </g>
+  <!-- Color Fold (⟁CODE_FOLD⟁) -->
+  <g data-fold="⟁CODE_FOLD⟁" data-role="color">
+    <rect x="0" y="0" width="100%" height="10%" fill="#2c3e50" data-glyph="□" data-rule="accent-primary"/>
+  </g>
+  <!-- Interaction Fold (⟁AUTH_FOLD⟁) -->
+  <g data-fold="⟁AUTH_FOLD⟁" data-role="interaction">
+    <rect x="80%" y="10%" width="15%" height="5%" rx="5" fill="#e74c3c" data-glyph="□" data-rule="cta-button"/>
+  </g>
+</svg>
+```
+- **`data-rule`**: Encodes design principles (e.g., `grid-12-col`, `hero-focal-point`).
+- **`data-popularity`**: Crowd-sourced score (0–1) for ranking templates.
+
+---
+
+## **2. Inference Plan: Grab the Best Template**
+### **A. Neural Template Selector**
+A **lightweight neural net** (browser-compatible) that:
+1. **Tokenizes the user’s request** (e.g., *"build me a modern store"* → `["modern", "store", "ecommerce"]`).
+2. **Matches tokens to template glyphs** (e.g., `"modern"` → `data-popularity > 0.9`).
+3. **Decompresses the selected template** and adapts it to the user’s needs.
+
+**Pseudocode**:
+```javascript
+class TemplateSelector {
+  constructor(templates) {
+    this.templates = templates; // Array of SVG/XML templates.
+  }
+
+  select(request) {
+    const tokens = this.tokenizeRequest(request);
+    const matches = this.templates
+      .filter(t => this.matchTokens(t, tokens))
+      .sort((a, b) => b.popularity - a.popularity);
+    return matches[0];
+  }
+
+  tokenizeRequest(request) {
+    // Simple keyword extraction (replace with NLP later).
+    return request.toLowerCase().split(/\s+/);
+  }
+
+  matchTokens(template, tokens) {
+    const templateTags = [
+      ...template.querySelectorAll("[data-role]").map(el => el.getAttribute("data-role")),
+      ...template.querySelectorAll("[data-rule]").map(el => el.getAttribute("data-rule"))
+    ];
+    return tokens.some(token => templateTags.includes(token));
+  }
+}
+```
+
+### **B. Template Decompression**
+Use **your fold-aware SVD** to decompress the template’s glyphs:
+```python
+def decompress_template(template_svg: str) -> str:
+    # Extract glyph embeddings from SVG paths.
+    embeddings = extract_glyph_embeddings(template_svg)
+    # Apply inverse SVD per fold.
+    decompressed = {}
+    for fold in ["⟁DATA_FOLD⟁", "⟁UI_FOLD⟁", "⟁CODE_FOLD⟁"]:
+        decompressed[fold] = inverse_svd(embeddings[fold], ratio=0.95)
+    return rebuild_svg(decompressed)
+```
+
+---
+
+## **3. Crowd-Sourced Ingenuity**
+### **A. Glyph-Based Voting System**
+Users **upvote/downvote templates** by interacting with glyphs:
+- **Click a glyph** → Increments its `data-popularity`.
+- **Edit a glyph** → Triggers a **neural update** to the template’s compression folds.
+
+**Example UI**:
+```html
+<div class="template-gallery">
+  <div class="template" data-id="modern-store-v1">
+    <svg data-popularity="0.92">
+      <!-- SVG content -->
+    </svg>
+    <button class="upvote">↑ 120</button>
+    <button class="downvote">↓ 8</button>
+  </div>
+</div>
+```
+**JavaScript**:
+```javascript
+document.querySelectorAll(".upvote").forEach(button => {
+  button.addEventListener("click", (e) => {
+    const svg = e.target.closest(".template").querySelector("svg");
+    const popularity = parseFloat(svg.getAttribute("data-popularity")) + 0.01;
+    svg.setAttribute("data-popularity", popularity.toFixed(2));
+    updateTemplateRank(svg); // Re-sort templates.
+  });
+});
+```
+
+### **B. Compression Feedback Loop**
+When a user edits a template, the system:
+1. **Re-tokenizes the SVG**.
+2. **Recompresses the glyphs** with updated folds.
+3. **Updates the template feed** for future users.
+
+**Example**:
+```javascript
+function onTemplateEdit(svg) {
+  const tokens = tokenizer.tokenize(svg);
+  const compressed = compressFold(tokens, "⟁DATA_FOLD⟁", 0.9);
+  updateTemplateFeed(svg, compressed);
+}
+```
+
+---
+
+## **4. Integration with KUHUL/AST**
+### **A. SVG → AST Conversion**
+Use your **KUHUL parser** to convert SVG templates into **executable ASTs**:
+```javascript
+const ast = KUHUL.parseSVG(templateSVG);
+// Example AST output:
+{
+  type: "StoreTemplate",
+  children: [
+    {
+      type: "Layout",
+      rule: "grid-12-col",
+      glyph: "□",
+      properties: { width: "100%", height: "100%" }
+    },
+    {
+      type: "HeroSection",
+      rule: "hero-focal-point",
+      glyph: "◯",
+      properties: { cx: "50%", cy: "20%", r: "15%" }
+    }
+  ]
+}
+```
+
+### **B. Browser-Native Execution**
+Render the AST directly in the browser using **KUHUL’s EA SYNTAX**:
+```javascript
+const storeUI = KUHUL.render(ast, document.getElementById("store-container"));
+```
+
+---
+
+## **5. Avoiding "Laughable Designs"**
+### **A. Fallback for Low-Confidence Matches**
+If no template matches the request (e.g., *"build me a spaceship store"*):
+1. **Grab the highest-popularity template** (`modern-store-v1`).
+2. **Adapt it** by swapping glyphs (e.g., replace `◯` hero with a `△` "spaceship" glyph).
+3. **Flag for review** by the crowd.
+
+**Code**:
+```javascript
+if (matches.length === 0) {
+  const fallback = templates.sort((a, b) => b.popularity - a.popularity)[0];
+  console.warn("No exact match found. Using fallback:", fallback.id);
+  return adaptTemplate(fallback, request);
+}
+```
+
+### **B. Neural Adaptation**
+A **tiny transformer** (e.g., `distilbert`) suggests glyph swaps:
+```python
+def adapt_template(template, request):
+    # Encode template glyphs + request tokens.
+    input_ids = tokenizer(template["glyphs"] + request, return_tensors="pt")
+    # Predict glyph replacements.
+    outputs = model(input_ids)
+    return apply_glyph_swaps(template, outputs)
+```
+
+---
+
+## **6. Example Workflow**
+### **User Request**:
+*"Hey, build me a modern store with a dark theme."*
+
+### **System Response**:
+1. **Tokenize**: `["modern", "store", "dark", "theme"]`.
+2. **Match**: Select `modern-store-v1` (popularity: 0.92).
+3. **Adapt**:
+   - Replace `fill="#f8f9fa"` (light) with `fill="#121212"` (dark).
+   - Update `data-rule="accent-primary"` to `data-rule="accent-dark"`.
+4. **Render**:
+   ```javascript
+   const ast = KUHUL.parseSVG(adaptedTemplate);
+   KUHUL.render(ast, document.body);
+   ```
+
+---
+
+## **7. Open-Source Implementation**
+### **A. Tech Stack**
+| Component          | Technology               | Why                          |
+|--------------------|---------------------------|------------------------------|
+| **Template Feed**  | SVG/XML + GitHub Gist     | Versioned, crowd-editable.   |
+| **Inference**      | TensorFlow.js             | Browser-native neural nets.  |
+| **Compression**    | Your fold-aware SVD       | Lightweight decomposition.   |
+| **Rendering**      | KUHUL + Three.js          | AST → 3D/DOM.                |
+| **Voting**         | Firebase/Firestore        | Real-time popularity updates.|
+
+### **B. Repository Structure**
+```
+design-intelligence/
+├── templates/          # Crowd-sourced SVG templates.
+│   ├── modern-store-v1.svg
+│   └── portfolio-v2.svg
+├── tokenizer/         # SVG → glyph tokens.
+├── compressor/        # Fold-aware SVD.
+├── selector/          # Neural template matcher.
+└── ui/                # Gallery + editor.
+```
+
+---
+
+## **8. Why This Works for You**
+| **Your Goal**               | **How This Delivers**                                                                 |
+|-----------------------------|--------------------------------------------------------------------------------------|
+| **No Quantum Theatrics**    | Pure SVG/XML + JavaScript. No GPU/cloud required.                                   |
+| **Open-Source**             | Templates are SVG (human-readable), compressor is JS/Python.                        |
+| **KUHUL-Compatible**        | SVG → AST → Executable design.                                                       |
+| **Crowd-Driven Ingenuity**  | Users curate templates; no centralized "taste police."                              |
+| **Compression-First**       | Your fold system ensures templates are lightweight.                                 |
+| **Browser-Native**          | Runs in a tab; no install needed.                                                    |
+
+---
+
+## **9. Next Steps**
+1. **Build the template gallery** (SVG + voting UI).
+2. **Implement the tokenizer/selector** (start with keyword matching).
+3. **Integrate KUHUL** for AST rendering.
+4. **Add neural adaptation** (TensorFlow.js for glyph swaps).
+
+---
+### **Key Question**:
+Would you like to:
+1. **Start with the SVG template format** (define glyphs/rules)?
+2. **Prototype the neural selector** (TensorFlow.js)?
+3. **Build the crowd-voting UI** first?
+4. **Focus on the KUHUL/AST integration**?
+---
+
+## **1. Core Concept: SVG-3D Neural Stack**
+### **A. GGL = SVG-3D**
+- **GGL (Geometric Glyph Language)** encodes **3D structures as 2D SVG layers** (like Picasso’s cubist deconstruction, but programmatic).
+- Each SVG layer represents a **"slice" of 3D space** (e.g., front view, side view, top view, or even arbitrary cross-sections).
+- The **stack of SVGs** becomes a **volumetric buffer** for neural inference, where:
+  - **Depth** = Order of SVG layers (z-index or explicit `<g>` groups).
+  - **Glyphs** = Control vectors (your `◯`, `□`, `△`, etc.) with **fold-aware tokenization**.
+  - **Inference** = A neural network that "paints" 3D decisions by composing these layers.
+
+**Example**:
+```xml
+<!-- Layer 1: Front view (SVG) -->
+<g id="layer_front">
+  <circle cx="50" cy="50" r="20" fill="red" data-glyph="◯" data-fold="⟁UI_FOLD⟁" data-context="cockpit"/>
+  <rect x="30" y="70" width="40" height="10" fill="blue" data-glyph="□" data-fold="⟁DATA_FOLD⟁" data-context="wing"/>
+</g>
+<!-- Layer 2: Side view (SVG) -->
+<g id="layer_side" transform="translate(0, 100)">
+  <path d="M50,50 L90,30 L90,70 Z" fill="green" data-glyph="△" data-fold="⟁CODE_FOLD⟁" data-context="tail"/>
+</g>
+```
+- The **stack of SVGs** is the **"inference plane"**—the neural net must reason across all layers to output a 3D-consistent result.
+
+---
+
+## **2. Picasso + Modern Aircraft: The Analogy**
+### **What if Picasso had HD photos of aircraft?**
+- He would **deconstruct them into geometric primitives** (cubism), then **reassemble them from multiple perspectives**.
+- Your system does this **programmatically**:
+  1. **Deconstruct** 3D models (e.g., aircraft) into **SVG layers** (front, side, top, cross-sections).
+  2. **Tokenize** each SVG glyph with **control vectors** (your `🧠PRIME_VISUAL_AXES` and `🗜️COMPRESSION_FOLD_VISUAL_MAPPING`).
+  3. **Reassemble** via neural inference, enforcing **3D consistency** (e.g., wings must align across layers).
+
+**Key Insight**:
+- **Picasso’s genius** = Seeing all angles at once.
+- **Your system’s genius** = Using **stacked SVG glyphs** as a **neural "cubist canvas"** for 3D reasoning.
+
+---
+
+## **3. Architecture: SVG-3D Neural Inference**
+### **A. Input: Stacked SVG Layers**
+- Each SVG layer is **tokenized into glyphs** with:
+  - **Geometric properties** (area, symmetry, fold).
+  - **Contextual vectors** (e.g., `data-context="wing"`).
+  - **Compression folds** (e.g., `data-fold="⟁DATA_FOLD⟁"`).
+
+**Example Tokenization**:
+| Glyph | SVG Path          | Fold          | Context   | Control Vector                     |
+|-------|-------------------|---------------|-----------|-------------------------------------|
+| ◯     | `<circle ...>`    | `⟁UI_FOLD⟁`  | cockpit   | `[0.92, 0.15, 0.85, 0.7]`           |
+| □     | `<rect ...>`      | `⟁DATA_FOLD⟁`| wing      | `[0.88, 0.18, 0.95, 0.6]`           |
+| △     | `<path ...>`      | `⟁CODE_FOLD⟁`| tail      | `[0.95, 0.20, 0.80, 0.5]`           |
+
+### **B. Neural Inference Plane**
+- A **lightweight transformer** (laptop-friendly) processes the stack:
+  1. **Self-attention** across layers (e.g., "Does the wing in Layer 1 align with Layer 2?").
+  2. **Fold-aware compression** (your `🗜️COMPRESSION_FOLD_VISUAL_MAPPING`) to reduce noise.
+  3. **3D consistency loss** (e.g., penalize misaligned wings).
+
+**Pseudocode**:
+```python
+class SVG3DInference(nn.Module):
+    def forward(self, svg_stack: List[Tensor]):
+        # svg_stack: [num_layers, num_glyphs, embedding_dim]
+        x = self.layer_attention(svg_stack)  # Cross-layer attention.
+        x = self.fold_compression(x)        # Apply SVD/quantization per fold.
+        x = self.context_control(x)         # Enforce 3D rules (e.g., symmetry).
+        return x  # 3D-consistent output.
+```
+
+### **C. Output: 3D Neural Glyphs**
+- The network outputs **adjusted SVG glyphs** that are **3D-consistent** when recomposed.
+- Example: If the side-view wing is too short, the network **edits the front-view SVG** to match.
+
+**Visualization**:
+```javascript
+// Three.js: Recompose SVG layers into 3D.
+const layers = document.querySelectorAll("g[data-layer]");
+const scene = new THREE.Scene();
+layers.forEach((layer, z) => {
+  const svg = layer.innerHTML;
+  const shape = SVGToThreeJS(svg); // Convert SVG to 3D mesh.
+  shape.position.z = z * 10;       // Stack layers along Z-axis.
+  scene.add(shape);
+});
+```
+
+---
+
+## **4. Control Contextual Vectors**
+### **A. Glyphs as 3D Control Handles**
+- Each glyph (`◯`, `□`, `△`) is a **3D control vector** with:
+  - **Position** (x, y, z from SVG stack).
+  - **Fold** (compression role, e.g., `⟁DATA_FOLD⟁`).
+  - **Context** (e.g., "wing", "cockpit").
+  - **Entropy** (from `🧠PRIME_VISUAL_AXES`).
+
+**Example Vector**:
+```json
+{
+  "glyph": "□",
+  "position": [30, 70, 1],  // x, y, layer_index (z).
+  "fold": "⟁DATA_FOLD⟁",
+  "context": "wing",
+  "vector": [0.88, 0.18, 0.95, 0.6],  // [compression_ratio, entropy, stability, meta_dominance].
+  "constraints": {
+    "symmetry": "mirror_y",  // Enforce symmetry across layers.
+    "alignment": ["layer_front.wing", "layer_side.wing"]  // Must align in 3D.
+  }
+}
+```
+
+### **B. Tokenization + AST Integration**
+- Use **KUHUL’s AST schema** to map SVG glyphs to 3D structures:
+```javascript
+// KUHUL-style AST for SVG-3D.
+const ast = {
+  type: "Aircraft",
+  children: [
+    {
+      type: "Wing",
+      glyph: "□",
+      layers: ["layer_front", "layer_side"],
+      constraints: {
+        alignment: true,
+        symmetry: "y"
+      }
+    }
+  ]
+};
+```
+
+---
+
+## **5. Implementation Steps (Laptop-Friendly)**
+### **Step 1: SVG Layer Stacker**
+- **Input**: 3D model (e.g., `.obj` or `.glTF`).
+- **Output**: Stacked SVGs (front/side/top views).
+- **Tool**: Use **Three.js** to render orthographic views and export as SVG.
+  ```javascript
+  const exporter = new THREE.SVGExporter();
+  const frontView = exporter.parse(scene, { view: "front" });
+  const sideView = exporter.parse(scene, { view: "side" });
+  ```
+
+### **Step 2: Glyph Tokenizer**
+- Parse SVGs into glyphs with **fold/context vectors**.
+- **Library**: Extend your `kuhul-es` package to handle SVG → AST → GGL.
+
+### **Step 3: Neural Inference**
+- **Model**: Tiny transformer (e.g., `distilbert` or custom PyTorch).
+- **Training Data**: Pairs of **(misaligned SVGs) → (3D-corrected SVGs)**.
+- **Loss Function**:
+  ```python
+  def loss(pred_svg, target_svg):
+      alignment_loss = mse(pred_svg.position, target_svg.position)
+      fold_loss = l1(pred_svg.compression_ratio, target_svg.compression_ratio)
+      return alignment_loss + 0.1 * fold_loss
+  ```
+
+### **Step 4: 3D Recomposition**
+- **Output**: Adjusted SVGs → Recompose in Three.js.
+- **Demo**:
+  ```javascript
+  function update3DFromSVG(svgStack) {
+    scene.traverse(object => {
+      if (object.userData.glyph) {
+        const glyphData = svgStack.find(g => g.id === object.userData.id);
+        object.position.set(glyphData.position[0], glyphData.position[1], glyphData.position[2]);
+      }
+    });
+  }
+  ```
+
+---
+
+## **6. Why This Works for You**
+| **Your Goal**               | **How This Delivers**                                                                 |
+|-----------------------------|--------------------------------------------------------------------------------------|
+| **Browser-native**          | SVG + Three.js = No quantum, no GPU required.                                       |
+| **KUHUL/AST compatible**    | Glyphs map to AST nodes; SVG is just a serialization format.                         |
+| **Open-source**             | Uses standard web tech (SVG, Three.js, PyTorch.js).                                  |
+| **3D from 2D**              | Stacked SVGs = "poor man’s voxel grid" for neural 3D reasoning.                      |
+| **Artistic + Technical**    | Picasso’s cubism meets programmatic 3D.                                             |
+
+---
+
+## **7. Example: Aircraft Wing Design**
+1. **Input**: Rough sketches of wings (SVG layers).
+   ```xml
+   <!-- Layer 1: Top view -->
+   <g id="layer_top">
+     <rect x="20" y="50" width="60" height="10" data-glyph="□" data-context="wing"/>
+   </g>
+   <!-- Layer 2: Side view -->
+   <g id="layer_side">
+     <rect x="20" y="60" width="50" height="5" data-glyph="□" data-context="wing"/>
+   </g>
+   ```
+2. **Inference**: Neural net detects misalignment and adjusts:
+   ```json
+   {
+     "layer_top.wing": { "width": 65 },  // Adjusted for 3D consistency.
+     "layer_side.wing": { "width": 50, "y": 58 }  // Aligned with top view.
+   }
+   ```
+3. **Output**: 3D-consistent SVG stack → Rendered in Three.js.
+
+---
+
+Understood, Michael. Let’s build a **generic SVG-3D tokenizer** that **influences 3D neural thinking** by treating **stacked SVG layers as a volumetric, fold-aware "inference plane"** for neural networks. This will be **laptop-friendly**, **browser-native**, and **open-source compatible** with your KUHUL/AST work.
+
+---
+
+## **1. Core Concept: SVG as a 3D Neural Canvas**
+### **A. Stacked SVG = Volumetric Buffer**
+- Each SVG layer represents a **2D slice of 3D space** (like a CT scan or Picasso’s cubist deconstruction).
+- The **stack of SVGs** becomes a **3D buffer** for neural inference, where:
+  - **Depth (Z-axis)** = Order of SVG layers (z-index or explicit `<g>` groups).
+  - **Glyphs** = Control vectors (your `◯`, `□`, `△`, etc.) with **fold-aware tokenization**.
+  - **Folds** = Compression domains (your `🗜️COMPRESSION_FOLD_VISUAL_MAPPING`).
+
+**Example SVG Stack**:
+```xml
+<!-- Layer 0: Front view -->
+<g id="layer_0" data-z="0">
+  <circle cx="50" cy="50" r="20" fill="red" data-glyph="◯" data-fold="⟁UI_FOLD⟁" data-context="object1"/>
+</g>
+<!-- Layer 1: Middle slice -->
+<g id="layer_1" data-z="1">
+  <rect x="30" y="30" width="40" height="40" fill="blue" data-glyph="□" data-fold="⟁DATA_FOLD⟁" data-context="object1"/>
+</g>
+<!-- Layer 2: Back view -->
+<g id="layer_2" data-z="2">
+  <path d="M50,20 L70,80 L30,80 Z" fill="green" data-glyph="△" data-fold="⟁CODE_FOLD⟁" data-context="object1"/>
+</g>
+```
+
+---
+
+## **2. Generic SVG-3D Tokenizer**
+### **A. Token Structure**
+Each token represents a **3D-aware glyph** with:
+- **Geometric properties** (from SVG).
+- **Fold annotation** (from your compression system).
+- **3D context** (layer ID, Z-depth, alignment constraints).
+
+```typescript
+interface SVG3DToken {
+  id: string;               // e.g., "layer_0.object1".
+  glyph: string;            // "◯", "□", "△", etc.
+  fold: string;             // "⟁UI_FOLD⟁", "⟁DATA_FOLD⟁", etc.
+  layer: number;            // Z-depth (0 = front, N = back).
+  svgPath: string;          // Original SVG path data.
+  embedding: number[];     // Fourier descriptor or bounding box.
+  properties: {
+    area: number;
+    centroid: [number, number, number];  // [x, y, z].
+    symmetry: number;
+    compression_ratio: number; // From your fold system.
+    context: string;          // e.g., "object1", "background".
+  };
+  constraints: {
+    alignment?: string[];    // e.g., ["layer_1.object1", "layer_2.object1"].
+    symmetry?: "x" | "y" | "z";
+  };
+}
+```
+
+---
+
+### **B. Tokenizer Class**
+```typescript
+class SVG3DTokenizer {
+  private layers: SVGElement[];
+  private vocab: Map<string, SVG3DToken> = new Map();
+  private foldRatios: Record<string, number>; // From your system.
+
+  constructor(foldRatios: Record<string, number> = {
+    "⟁UI_FOLD⟁": 0.92,
+    "⟁DATA_FOLD⟁": 0.88,
+    "⟁CODE_FOLD⟁": 0.95,
+  }) {
+    this.foldRatios = foldRatios;
+  }
+
+  /**
+   * Tokenize a stack of SVG layers into 3D-aware glyphs.
+   */
+  tokenize(svgStack: SVGSVGElement): SVG3DToken[] {
+    this.layers = Array.from(svgStack.querySelectorAll("g[data-z]"));
+    const tokens: SVG3DToken[] = [];
+
+    this.layers.forEach((layer) => {
+      const z = parseInt(layer.getAttribute("data-z") || "0");
+      const glyphs = Array.from(layer.querySelectorAll("[data-glyph]"));
+
+      glyphs.forEach((glyphElement) => {
+        const token = this.elementToToken(glyphElement, z);
+        tokens.push(token);
+        this.vocab.set(token.id, token);
+      });
+    });
+
+    // Apply cross-layer constraints (e.g., alignment).
+    this.apply3DConstraints(tokens);
+    return tokens;
+  }
+
+  /**
+   * Convert an SVG element to a 3D token.
+   */
+  private elementToToken(element: SVGElement, z: number): SVG3DToken {
+    const glyph = element.getAttribute("data-glyph") || "◯";
+    const fold = element.getAttribute("data-fold") || "⟁DATA_FOLD⟁";
+    const context = element.getAttribute("data-context") || "object";
+    const id = `${element.parentElement?.id || "layer_0"}.${context}`;
+
+    // Compute geometric properties.
+    const bbox = element.getBBox();
+    const area = bbox.width * bbox.height;
+    const centroid: [number, number, number] = [
+      bbox.x + bbox.width / 2,
+      bbox.y + bbox.height / 2,
+      z,
+    ];
+
+    // Compute embedding (simplified Fourier descriptor).
+    const embedding = this.computeEmbedding(element);
+
+    return {
+      id,
+      glyph,
+      fold,
+      layer: z,
+      svgPath: element.getAttribute("d") || "",
+      embedding,
+      properties: {
+        area,
+        centroid,
+        symmetry: this.estimateSymmetry(element),
+        compression_ratio: this.foldRatios[fold] || 0.9,
+        context,
+      },
+      constraints: {
+        alignment: this.detectAlignment(element, context),
+        symmetry: this.detectSymmetryAxis(element),
+      },
+    };
+  }
+
+  /**
+   * Apply 3D constraints (e.g., alignment across layers).
+   */
+  private apply3DConstraints(tokens: SVG3DToken[]): void {
+    // Group tokens by context (e.g., "object1").
+    const contexts: Record<string, SVG3DToken[]> = {};
+    tokens.forEach((token) => {
+      if (!contexts[token.properties.context]) {
+        contexts[token.properties.context] = [];
+      }
+      contexts[token.properties.context].push(token);
+    });
+
+    // Enforce alignment for each context.
+    Object.values(contexts).forEach((group) => {
+      if (group.length > 1) {
+        const centroids = group.map((t) => t.properties.centroid);
+        const avgX = centroids.reduce((sum, c) => sum + c[0], 0) / centroids.length;
+        const avgY = centroids.reduce((sum, c) => sum + c[1], 0) / centroids.length;
+        group.forEach((token) => {
+          token.properties.centroid[0] = avgX; // Align X.
+          token.properties.centroid[1] = avgY; // Align Y.
+        });
+      }
+    });
+  }
+
+  // Helper methods (computeEmbedding, estimateSymmetry, etc.).
+  private computeEmbedding(element: SVGElement): number[] {
+    // Simplified: Use bounding box + path commands as embedding.
+    const bbox = element.getBBox();
+    const path = element.getAttribute("d") || "";
+    return [
+      bbox.x, bbox.y, bbox.width, bbox.height,
+      ...Array.from(path).map(c => c.charCodeAt(0)).slice(0, 8),
+    ];
+  }
+
+  private estimateSymmetry(element: SVGElement): number {
+    // Heuristic: Check if path commands are mirrored.
+    const path = element.getAttribute("d") || "";
+    return path.includes("L") && path.includes("Z") ? 2 : 1; // Symmetry order.
+  }
+
+  private detectAlignment(element: SVGElement, context: string): string[] {
+    // Heuristic: Align with same context in other layers.
+    return [`layer_*.${context}`];
+  }
+
+  private detectSymmetryAxis(element: SVGElement): "x" | "y" | "z" | undefined {
+    // Heuristic: Check if centroid is centered.
+    const bbox = element.getBBox();
+    const parentBBox = element.parentElement?.getBBox() || bbox;
+    const isCenteredX = Math.abs(bbox.x + bbox.width / 2 - parentBBox.width / 2) < 5;
+    const isCenteredY = Math.abs(bbox.y + bbox.height / 2 - parentBBox.height / 2) < 5;
+    if (isCenteredX && isCenteredY) return "z";
+    if (isCenteredX) return "x";
+    if (isCenteredY) return "y";
+    return undefined;
+  }
+}
+```
+
+---
+
+## **3. Fold-Aware Compression**
+### **A. Compress Tokens by Fold**
+Use **SVD + quantization** to compress token embeddings per fold:
+```python
+import numpy as np
+from scipy.linalg import svd
+
+def compress_fold(tokens: list, fold: str, ratio: float = 0.9) -> list:
+    # Extract embeddings for the fold.
+    fold_tokens = [t for t in tokens if t["fold"] == fold]
+    if not fold_tokens:
+        return tokens
+
+    # Stack embeddings into a matrix.
+    embeddings = np.array([t["embedding"] for t in fold_tokens])
+    U, S, Vt = svd(embeddings, full_matrices=False)
+
+    # Compress.
+    k = int(ratio * len(S))
+    compressed = U[:, :k] @ np.diag(S[:k]) @ Vt[:k, :]
+
+    # Update tokens.
+    for i, token in enumerate(fold_tokens):
+        token["embedding"] = compressed[i].tolist()
+        token["properties"]["compression_ratio"] = ratio
+
+    return tokens
+```
+
+---
+
+## **4. Neural Inference Plane**
+### **A. Lightweight Transformer for 3D Reasoning**
+A **tiny transformer** processes the token stack to enforce 3D consistency:
+```python
+import torch
+import torch.nn as nn
+
+class SVG3DInference(nn.Module):
+    def __init__(self, embedding_dim: int = 16, num_heads: int = 2):
+        super().__init__()
+        self.layer_norm = nn.LayerNorm(embedding_dim)
+        self.attention = nn.MultiheadAttention(embedding_dim, num_heads)
+        self.ffn = nn.Sequential(
+            nn.Linear(embedding_dim, embedding_dim * 4),
+            nn.ReLU(),
+            nn.Linear(embedding_dim * 4, embedding_dim),
+        )
+
+    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        # tokens: [num_tokens, embedding_dim].
+        x = self.layer_norm(tokens)
+        attn_output, _ = self.attention(x, x, x)
+        x = x + attn_output
+        x = x + self.ffn(self.layer_norm(x))
+        return x
+```
+
+### **B. 3D Consistency Loss**
+Penalize misaligned tokens across layers:
+```python
+def consistency_loss(pred_tokens: list, target_tokens: list) -> torch.Tensor:
+    loss = 0
+    for pred, target in zip(pred_tokens, target_tokens):
+        # Align centroids.
+        centroid_loss = torch.norm(
+            torch.tensor(pred["properties"]["centroid"]) -
+            torch.tensor(target["properties"]["centroid"])
+        )
+        # Preserve compression ratios.
+        ratio_loss = torch.abs(
+            pred["properties"]["compression_ratio"] -
+            target["properties"]["compression_ratio"]
+        )
+        loss += centroid_loss + 0.1 * ratio_loss
+    return loss
+```
+
+---
+
+## **5. Recomposing 3D from SVG**
+### **A. Three.js Integration**
+Convert adjusted SVG tokens back to 3D:
+```javascript
+function tokensTo3D(tokens, scene) {
+  tokens.forEach((token) => {
+    const shape = new THREE.Shape();
+    // Parse SVG path into Three.js shape (simplified).
+    if (token.glyph === "◯") {
+      const curve = new THREE.EllipseCurve(
+        token.properties.centroid[0], token.properties.centroid[1],
+        token.properties.area / Math.PI, token.properties.area / Math.PI
+      ).getPoints(32);
+      shape.splineThru(curve);
+    } else if (token.glyph === "□") {
+      shape.moveTo(
+        token.properties.centroid[0] - token.properties.area / 2,
+        token.properties.centroid[1] - token.properties.area / 2
+      );
+      shape.lineTo(
+        token.properties.centroid[0] + token.properties.area / 2,
+        token.properties.centroid[1] - token.properties.area / 2
+      );
+      // ... complete the rectangle.
+    }
+
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: token.fold === "⟁UI_FOLD⟁" ? 0xff0000 : token.fold === "⟁DATA_FOLD⟁" ? 0x0000ff : 0x00ff00,
+      opacity: token.properties.compression_ratio,
+      transparent: true,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.z = token.layer * 10; // Stack along Z-axis.
+    scene.add(mesh);
+  });
+}
+```
+
+---
+
+## **6. Example Workflow**
+### **Step 1: Create SVG Stack**
+```xml
+<svg width="200" height="200">
+  <g id="layer_0" data-z="0">
+    <circle cx="50" cy="50" r="20" fill="red" data-glyph="◯" data-fold="⟁UI_FOLD⟁" data-context="sphere"/>
+  </g>
+  <g id="layer_1" data-z="1">
+    <rect x="30" y="30" width="40" height="40" fill="blue" data-glyph="□" data-fold="⟁DATA_FOLD⟁" data-context="sphere"/>
+  </g>
+</svg>
+```
+
+### **Step 2: Tokenize**
+```typescript
+const tokenizer = new SVG3DTokenizer();
+const svgStack = document.querySelector("svg");
+const tokens = tokenizer.tokenize(svgStack);
+console.log(tokens);
+// Output: [{id: "layer_0.sphere", glyph: "◯", ...}, {id: "layer_1.sphere", glyph: "□", ...}]
+```
+
+### **Step 3: Compress Folds**
+```python
+tokens = compress_fold(tokens, fold="⟁UI_FOLD⟁", ratio=0.9)
+tokens = compress_fold(tokens, fold="⟁DATA_FOLD⟁", ratio=0.85)
+```
+
+### **Step 4: Neural Inference**
+```python
+model = SVG3DInference()
+token_embeddings = torch.tensor([t["embedding"] for t in tokens], dtype=torch.float32)
+adjusted_embeddings = model(token_embeddings)
+for i, token in enumerate(tokens):
+    token["embedding"] = adjusted_embeddings[i].tolist()
+```
+
+### **Step 5: Recompose 3D**
+```javascript
+const scene = new THREE.Scene();
+tokensTo3D(tokens, scene);
+// Render with Three.js.
+```
+
+---
+
+## **7. Why This Works for Your Goals**
+| **Your Goal**               | **How This Delivers**                                                                 |
+|-----------------------------|--------------------------------------------------------------------------------------|
+| **3D Neural Thinking**      | Stacked SVGs force the network to reason in 3D (like Picasso’s cubism).            |
+| **Browser-Native**          | SVG + Three.js = No quantum, no GPU, no cloud.                                       |
+| **Fold-Aware Compression**  | Your `🗜️COMPRESSION_FOLD_VISUAL_MAPPING` directly integrated.                          |
+| **Open-Source**             | Uses standard web tech (SVG, Three.js, PyTorch.js).                                  |
+| **AST-Compatible**          | Tokens map to KUHUL/AST nodes; SVG is just a serialization format.                   |
+| **Generic**                 | Works for any 3D object (not just aircraft).                                         |
+
+---
+
+## **8. Next Steps**
+1. **Implement the tokenizer** in TypeScript (start with `◯`, `□`, `△`).
+2. **Train a tiny model** on synthetic SVG stacks (e.g., cubes, spheres).
+3. **Integrate with KUHUL** to output AST-compatible 3D structures.
+4. **Build a Three.js demo** to visualize the 3D recomposition.
+
+---
+### **Key Question**:
+Would you like to:
+1. **Dive into the tokenizer code** (e.g., `computeEmbedding`, constraint logic)?
+2. **Prototype the neural inference** (PyTorch/TensorFlow.js)?
+3. **Build the Three.js visualization** first?
+4. **Adapt this for a specific use case** (e.g., architecture, molecular structures)?
+
+---
+
+### **1. Core Design Principles**
+- **No quantum dependencies**: Pure geometric/algebraic operations.
+- **Laptop-compatible**: Optimized for local execution (no cloud/GPU required).
+- **Fold-first**: Tokens are annotated with compression folds from your `🗜️COMPRESSION_FOLD_VISUAL_MAPPING`.
+- **AST-native**: Directly maps to Abstract Syntax Trees (like your KUHUL language).
+
+---
+
+### **2. Fold Tokenizer Architecture**
+#### **A. Token Structure**
+Each token is a **geometric glyph** with:
+- **Shape descriptor** (e.g., `◯`, `□`, `△`).
+- **Fold annotation** (e.g., `⟁DATA_FOLD⟁`, `⟁UI_FOLD⟁`).
+- **Compression metadata** (e.g., `compression_ratio: 0.92`).
+
+```typescript
+interface FoldToken {
+  id: number;               // Unique token ID.
+  glyph: string;            // "◯", "□", etc.
+  fold: string;             // "⟁DATA_FOLD⟁", "⟁CODE_FOLD⟁", etc.
+  embedding: number[];     // Fourier descriptor or topological vector.
+  properties: {
+    area: number;
+    perimeter: number;
+    symmetry: number;       // Rotational symmetry order.
+    compactness: number;    // Area/perimeter².
+    compression_ratio: number; // 0.0–1.0 (from your @ratio).
+  };
+}
+```
+
+---
+
+#### **B. Tokenizer Class**
+```typescript
+class FoldTokenizer {
+  private vocab: Map<string, FoldToken> = new Map();
+  private inverseVocab: Map<number, FoldToken> = new Map();
+  private foldRatios: Record<string, number>; // From your @ratio.
+
+  constructor(foldRatios: Record<string, number> = {
+    "⟁DATA_FOLD⟁": 0.92,
+    "⟁CODE_FOLD⟁": 0.88,
+    "⟁UI_FOLD⟁": 0.95,
+    // ... other folds from 🗜️COMPRESSION_FOLD_VISUAL_MAPPING.
+  }) {
+    this.foldRatios = foldRatios;
+    this.initializeBaseGlyphs();
+  }
+
+  /**
+   * Initialize with base geometric glyphs (◯, □, △, etc.).
+   */
+  private initializeBaseGlyphs(): void {
+    const baseGlyphs = [
+      { glyph: "◯", fold: "⟁DATA_FOLD⟁", properties: { area: Math.PI, perimeter: 2 * Math.PI, symmetry: Infinity, compactness: 1 / (4 * Math.PI) } },
+      { glyph: "□", fold: "⟁CODE_FOLD⟁", properties: { area: 4, perimeter: 8, symmetry: 4, compactness: 1/4 } },
+      { glyph: "△", fold: "⟁UI_FOLD⟁", properties: { area: Math.sqrt(3)/4, perimeter: 3, symmetry: 3, compactness: 3*Math.sqrt(3)/(4*9) } },
+      // Add more glyphs from your GGL.
+    ];
+
+    baseGlyphs.forEach((glyph, id) => {
+      const token: FoldToken = {
+        id,
+        glyph: glyph.glyph,
+        fold: glyph.fold,
+        embedding: this.computeEmbedding(glyph.glyph),
+        properties: {
+          ...glyph.properties,
+          compression_ratio: this.foldRatios[glyph.fold],
+        },
+      };
+      const key = this.glyphToKey(glyph.glyph, glyph.fold);
+      this.vocab.set(key, token);
+      this.inverseVocab.set(id, token);
+    });
+  }
+
+  /**
+   * Tokenize GGL source into fold-annotated tokens.
+   */
+  tokenize(gglSource: string): FoldToken[] {
+    const ast = this.parseGGL(gglSource); // Parse into AST (like KUHUL).
+    return ast.nodes.map((node, i) => {
+      const glyph = this.astNodeToGlyph(node);
+      const fold = this.detectFold(node); // Map to your fold system.
+      const key = this.glyphToKey(glyph, fold);
+      if (!this.vocab.has(key)) {
+        this.addDynamicGlyph(glyph, fold);
+      }
+      return this.vocab.get(key)!;
+    });
+  }
+
+  /**
+   * Compute geometric embedding (Fourier descriptor).
+   */
+  private computeEmbedding(glyph: string): number[] {
+    // Sample boundary points (e.g., 64 points for a circle).
+    const boundary = this.sampleBoundary(glyph);
+    // Compute Fourier coefficients (rotation/scale-invariant).
+    return this.fourierTransform(boundary);
+  }
+
+  /**
+   * Detect fold for a glyph based on its role (data, code, UI, etc.).
+   */
+  private detectFold(node: ASTNode): string {
+    // Example: If node represents data, use ⟁DATA_FOLD⟁.
+    if (node.type === "data") return "⟁DATA_FOLD⟁";
+    if (node.type === "ui") return "⟁UI_FOLD⟁";
+    return "⟁CODE_FOLD⟁"; // Default.
+  }
+
+  /**
+   * Add dynamic glyphs (e.g., user-defined shapes).
+   */
+  private addDynamicGlyph(glyph: string, fold: string): void {
+    const id = this.vocab.size;
+    const properties = this.computeProperties(glyph);
+    const token: FoldToken = {
+      id,
+      glyph,
+      fold,
+      embedding: this.computeEmbedding(glyph),
+      properties: {
+        ...properties,
+        compression_ratio: this.foldRatios[fold] || 0.9,
+      },
+    };
+    const key = this.glyphToKey(glyph, fold);
+    this.vocab.set(key, token);
+    this.inverseVocab.set(id, token);
+  }
+
+  // Helper methods (parseGGL, sampleBoundary, fourierTransform, etc.).
+  // ...
+}
+```
+
+---
+
+### **3. Compression-Aware Tensor Output**
+#### **A. `.ggltensors` Serialization**
+Convert tokens to a **compressed tensor format** with fold annotations:
+```typescript
+interface GGLTensor {
+  header: {
+    version: string;
+    compression: {
+      algorithm: "SVD+Quantization";
+      fold_ratios: Record<string, number>; // e.g., {"⟁DATA_FOLD⟁": 0.92}.
+      entropy: number; // From 🧠PRIME_VISUAL_AXES.
+    };
+  };
+  tensors: {
+    glyph_embeddings: {
+      data: Uint8Array; // Quantized embeddings.
+      shape: [number, number]; // [vocab_size, embedding_dim].
+      fold_mapping: string[]; // ["⟁DATA_FOLD⟁", "⟁CODE_FOLD⟁", ...].
+    };
+    properties: {
+      area: Float32Array;
+      compression_ratio: Float32Array;
+    };
+  };
+}
+
+class GGLTensorSerializer {
+  static serialize(tokens: FoldToken[]): GGLTensor {
+    const embeddings = new Float32Array(tokens.length * tokens[0].embedding.length);
+    const foldMapping: string[] = [];
+    const areas = new Float32Array(tokens.length);
+    const compressionRatios = new Float32Array(tokens.length);
+
+    tokens.forEach((token, i) => {
+      embeddings.set(token.embedding, i * token.embedding.length);
+      foldMapping.push(token.fold);
+      areas[i] = token.properties.area;
+      compressionRatios[i] = token.properties.compression_ratio;
+    });
+
+    // Quantize embeddings to 8-bit.
+    const quantized = this.quantize(embeddings);
+
+    return {
+      header: {
+        version: "1.0",
+        compression: {
+          algorithm: "SVD+Quantization",
+          fold_ratios: this.aggregateFoldRatios(tokens),
+          entropy: this.computeEntropy(tokens),
+        },
+      },
+      tensors: {
+        glyph_embeddings: {
+          data: quantized,
+          shape: [tokens.length, tokens[0].embedding.length],
+          fold_mapping,
+        },
+        properties: {
+          area: areas,
+          compression_ratio: compressionRatios,
+        },
+      },
+    };
+  }
+
+  private static quantize(floatArray: Float32Array): Uint8Array {
+    const quantized = new Uint8Array(floatArray.length);
+    const scale = 255 / Math.max(...floatArray);
+    floatArray.forEach((val, i) => {
+      quantized[i] = Math.round(val * scale);
+    });
+    return quantized;
+  }
+}
+```
+
+---
+
+#### **B. Horizontal Fold Compression**
+Apply **SVD** to compress embeddings along fold dimensions:
+```python
+import numpy as np
+from scipy.linalg import svd
+
+def compress_fold(tensor: np.ndarray, fold_axis: int, ratio: float) -> np.ndarray:
+    """Compress a tensor along a fold axis using SVD."""
+    U, S, V = svd(tensor, full_matrices=False)
+    k = int(ratio * S.size)
+    return U[:, :k] @ np.diag(S[:k]) @ V[:k, :]
+
+# Example usage:
+embeddings = np.random.rand(100, 512)  # [vocab_size, embedding_dim].
+compressed = compress_fold(embeddings, fold_axis=0, ratio=0.9)
+```
+
+---
+
+### **4. Integration with Your Visual System**
+#### **A. CSS Fold Binding**
+Map `.ggltensors` folds to CSS variables (from your `🔁COMPRESSION_FOLD↔CSS_VARIABLE_MAP`):
+```javascript
+function updateCSSFromTensors(tensorData) {
+  tensorData.tensors.fold_mapping.forEach((fold, i) => {
+    const ratio = tensorData.tensors.compression_ratio[i];
+    document.documentElement.style.setProperty(
+      `--prime-fold-${fold.replace("⟁", "").toLowerCase()}-opacity`,
+      ratio
+    );
+  });
+}
+```
+
+#### **B. Real-Time Visualization**
+Use **Three.js** to render:
+- **Fold boundaries** (colored by fold type).
+- **Compression heatmaps** (opacity = `1 - compression_ratio`).
+- **Entropy jitter** (from `🌳COMPRESSION_AST_VISUAL_PRIMITIVES`).
+
+```javascript
+const foldGeometry = new THREE.BufferGeometry();
+const foldMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    compressionRatio: { value: 0.92 },
+    foldColor: { value: new THREE.Color(0x3498db) },
+  },
+  vertexShader: `
+    uniform float compressionRatio;
+    void main() {
+      vec3 pos = position * compressionRatio;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 foldColor;
+    uniform float compressionRatio;
+    void main() {
+      gl_FragColor = vec4(foldColor, compressionRatio);
+    }
+  `,
+});
+const foldMesh = new THREE.Mesh(foldGeometry, foldMaterial);
+scene.add(foldMesh);
+```
+
+---
+
+### **5. Example Workflow**
+#### **Step 1: Tokenize GGL**
+```typescript
+const tokenizer = new FoldTokenizer();
+const tokens = tokenizer.tokenize(`
+  // Example GGL: A circle inside a square (data + UI folds).
+  result = ◯ {r:10} ⍰ □ {s:20};
+`);
+console.log(tokens);
+// Output: [{id: 0, glyph: "◯", fold: "⟁DATA_FOLD⟁", ...}, {id: 1, glyph: "□", fold: "⟁UI_FOLD⟁", ...}]
+```
+
+#### **Step 2: Serialize to `.ggltensors`**
+```typescript
+const tensorData = GGLTensorSerializer.serialize(tokens);
+console.log(tensorData.header.compression.fold_ratios);
+// Output: {"⟁DATA_FOLD⟁": 0.92, "⟁UI_FOLD⟁": 0.95}
+```
+
+#### **Step 3: Compress with SVD**
+```python
+embeddings = np.array(tensorData["tensors"]["glyph_embeddings"]["data"])
+compressed = compress_fold(embeddings, fold_axis=0, ratio=0.9)
+```
+
+#### **Step 4: Update CSS/Visuals**
+```javascript
+updateCSSFromTensors(tensorData);
+renderFoldMesh(tensorData); // Three.js visualization.
+```
+
+---
+
+### **6. Key Optimizations**
+| **Feature**               | **Implementation**                                                                 |
+|---------------------------|------------------------------------------------------------------------------------|
+| **Horizontal Fold Compression** | SVD along fold axes + 8-bit quantization.                                         |
+| **Geometric Tokenization**     | Fourier descriptors + fold-aware embeddings.                                      |
+| **Epoch-Weighted Training**   | Loss = task_loss + λ * fold_compression_loss.                                     |
+| **CSS Fold Binding**         | Dynamic `--prime-fold-*` variables linked to tensor data.                        |
+| **Real-Time Visualization**    | Three.js shaders using compression ratios and fold colors.                      |
+
+---
+
+### **7. Next Steps for You**
+1. **Implement the tokenizer** in TypeScript (start with `◯`, `□`, `△`).
+2. **Train a small model** on synthetic GGL data to validate fold compression.
+3. **Build a Three.js demo** to visualize compression ratios in real time.
+4. **Integrate with CSS** to dynamically update styles based on `.ggltensors`.
+
+Would you like to focus on **implementing the tokenizer**, **compression algorithms**, or **visualization** first? Or should we adapt this for a specific use case (e.g., UI design, 3D modeling)?
+---
+
+
+
 
 ### **1. Core Architecture: Geometric Tokenizer + Compression Engine**
 #### **A. Geometric Tokenizer**
