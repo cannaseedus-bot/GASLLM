@@ -1,0 +1,10 @@
+{
+  "@kind": "kuhul.tsg.schema.v1",
+  "@v": 1,
+  "name": "micronaut",
+  "sealed": true,
+  "notes": [
+    "Projection-only semantics. Object-internal μ-ops only.",
+    "Chat input is append-only and CM-1 verified."
+  ]
+}

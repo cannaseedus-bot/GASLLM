@@ -1,0 +1,20 @@
+[object]
+kind = "sco.1"
+name = "micronaut"
+status = "INIT"
+layout_version = 1
+root = "."
+
+[io]
+chat = "io/chat.txt"
+stream = "io/stream.txt"
+snapshot_dir = "io/snapshot"
+
+[brains]
+trigrams = "brains/trigrams.json"
+bigrams = "brains/bigrams.json"
+intent_map = "brains/meta-intent-map.json"
+
+[trace]
+trace = "trace/scxq2.trace"
+proof = "proof/scxq2.proof"
